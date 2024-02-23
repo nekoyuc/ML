@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-class Box2DEnv(gym.Env):
+class TowerBuildingEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self):
@@ -22,17 +22,32 @@ class Box2DEnv(gym.Env):
         # ... Create Box2D bodies, fixtures, joints, etc...
 
         # 3. Define action and observation spaces
-        self.action_space = gym.spaces.Discrete(2)
         self.observation_space = gym.spaces.Box(low=-10, high=10, shape=(4,))
-    
+        self.action_space = gym.spaces.MultiDiscrete([2, 2, 2, 2])
+        
     def step(self, action):
-        # ... Execute action (e.g. apply forces to Box2D bodies, etc...)
-        # ... Update Box2D world, get observations, etc...
-        observation = ... # e.g. get position, velocity, etc...
+        # 4. Execute action (e.g. apply forces to Box2D bodies, etc...)
+        # 5. Update Box2D world, get observations, etc...
+        world.Step(1.0 / 60, 6, 2)
+
+        # 6. Observation:
+        new_observation = self.get_observation()
         reward = ... # Calculate reward based on new state and goals
         done = ... # Check if episode is done (e.g. if agent fell off the screen, etc...)
         info = ... # Additional information (e.g. for debugging)
-        return observation, reward, done, info
+        return new_observation, reward, done, info
+    
+    def get_observation(self):
+        # Build observation vector: block positions, tower height/width, joint info...
+        return observation_vector
+    
+    def calcualte_reward(self):
+        # ... Calculate reward based on current state and goals
+        return reward
+    
+    def check_done(self):
+        # Did the tower reach the goal? Did it collapse? etc...
+        return done
     
     def reset(self):
         # ... Reset Box2D world, get initial observations, etc...
