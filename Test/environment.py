@@ -1,5 +1,7 @@
 import gym
 import pygame
+from Box2D import (b2World, b2PolygonShape, b2_dynamicBody, b2DistanceJointDef, b2WeldJointDef)
+import random
 env = gym.make('CartPole-v0')
 
 import torch
@@ -9,11 +11,14 @@ import torch.optim as optim
 class TowerBuildingEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self):
+    def __init__(self, goal_width, goal_height, max_joints):
         # 1. Pygame Initialization
         pygame.init()
         self.screen = pygame.display.set_mode((800, 600))
         # ... Load game assets, etc...
+        self.goal_width = goal_width
+        self.goal_height = goal_height
+        self.max_joints = max_joints
         self.clock = pygame.time.Clock()
         self.ground = world.CreateStaticBody(position=(0, 0))
 
@@ -28,12 +33,12 @@ class TowerBuildingEnv(gym.Env):
     def step(self, action):
         # 4. Execute action (e.g. apply forces to Box2D bodies, etc...)
         # 5. Update Box2D world, get observations, etc...
-        world.Step(1.0 / 60, 6, 2)
+        world.Step(1.0 / 60, 6, 2) # 60Hz, 6 velocity iterations, 2 position iterations
 
         # 6. Observation:
         new_observation = self.get_observation()
-        reward = ... # Calculate reward based on new state and goals
-        done = ... # Check if episode is done (e.g. if agent fell off the screen, etc...)
+        reward = self.calcualte_reward() # Calculate reward based on new state and goals
+        done = self.check_done() # Check if episode is done (e.g. if agent fell off the screen, etc...)
         info = ... # Additional information (e.g. for debugging)
         return new_observation, reward, done, info
     
@@ -51,7 +56,7 @@ class TowerBuildingEnv(gym.Env):
     
     def reset(self):
         # ... Reset Box2D world, get initial observations, etc...
-        return initial_observation
+        return self.get_observation()
     
     def render(self, mode='human'):
         if mode == 'human':
