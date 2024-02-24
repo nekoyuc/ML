@@ -2,6 +2,7 @@ import gym
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import numpy as np
 from environment import TowerBuildingEnv
 
 # ... Other RL algorithm imports ...
@@ -9,17 +10,23 @@ from environment import TowerBuildingEnv
 # Hyperparameters
 GOAL_WIDTH = 5
 GOAL_HEIGHT = 20
+GRID_SIZE = 50
 MAX_JOINTS = 20
 NUM_EPISODES = 1000
+MAX_STEPS_PER_EPISODE = 1000
+LEARNING_RATE = 0.1
+DISCOUNT_FACTOR = 0.95
+EPSILON = 1.0 # Initial exploration rate
+EPSILON_DECAY = 0.995 # How quickly exploration decreases
 
 # Create environment instance
-env = TowerBuildingEnv(goal_width=GOAL_WIDTH, goal_height=GOAL_HEIGHT, max_joints=MAX_JOINTS)
+env = TowerBuildingEnv(goal_width=GOAL_WIDTH, goal_height=GOAL_HEIGHT, grid_size=GRID_SIZE, max_joints=MAX_JOINTS)
 
 # Define your RL Agent
-class TowerRLModel(nn.Module): # Inherit from nn.Module
+class TowerQNetWork(nn.Module): # Inherit from nn.Module
     # ... (Your network structure here) ...
     def __init__(self, observation_space, action_space):
-        super(TowerRLModel, self).__init__()
+        super(TowerQNetWork, self).__init__()
         # ... Your network layers ...
         self.output_layer = nn.ModuleList([
             nn.Linear(...), # Output for choosing block to place
@@ -35,9 +42,14 @@ class TowerRLModel(nn.Module): # Inherit from nn.Module
         #return action_values # Or policy output, depending on your RL algorithm
         return [output(x) for output in self.output_layer]
 
-model = TowerRLModel(env.observation_space, env.action_space)
+model = TowerQNetWork(env.observation_space, env.action_space)
 
 # ... Set up RL algorithm, optimizer, etc ...
+
+# Initialize Q-Table - You'll need a way to map states and actions to Q-values
+num_states = ... # Calculate based on observation space encoding
+num_actions = ... # Calculate based on action space encoding
+Q_table = np.zeros([num_states, num_actions])
 
 # Training loop
 for episode in range(NUM_EPISODES):
