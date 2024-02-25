@@ -10,7 +10,7 @@ from environment import TowerBuildingEnv
 # Hyperparameters
 GOAL_WIDTH = 5
 GOAL_HEIGHT = 20
-GRID_SIZE = 50
+GRID_SIZE = 30
 MAX_JOINTS = 20
 NUM_EPISODES = 1000
 MAX_STEPS_PER_EPISODE = 1000
@@ -28,19 +28,17 @@ class TowerQNetWork(nn.Module): # Inherit from nn.Module
     def __init__(self, observation_space, action_space):
         super(TowerQNetWork, self).__init__()
         # ... Your network layers ...
-        self.output_layer = nn.ModuleList([
-            nn.Linear(...), # Output for choosing block to place
-            nn.Linear(...), # Output for choosing distance joint
-            nn.Linear(...)  # Output for choosing weld joint
-        ])
-        # self.observation_space = observation_space
-        # self.action_space = action_space
-        # ... (Your network structure here) ...
+        self.layers = nn.Sequential(
+            nn.Linear(observation_space, 128),
+            nn.ReLU(),
+            nn.Linear(128, 903), # Output for block placement (900) + angle choice (3)
+            nn.Linear(903, 9) # Joint decision (1 binary + 8 locations)
+        )
 
     def forward(self, x):
         # ... (Your forward pass logic here) ...
         #return action_values # Or policy output, depending on your RL algorithm
-        return [output(x) for output in self.output_layer]
+        return self.layers(x)
 
 model = TowerQNetWork(env.observation_space, env.action_space)
 
@@ -49,7 +47,8 @@ model = TowerQNetWork(env.observation_space, env.action_space)
 # Initialize Q-Table - You'll need a way to map states and actions to Q-values
 num_states = ... # Calculate based on observation space encoding
 num_actions = ... # Calculate based on action space encoding
-Q_table = np.zeros([num_states, num_actions])
+#Q_table = np.zeros([num_states, num_actions])
+q_values = model(torch.tensor(env.reset()).float())
 
 # Training loop
 for episode in range(NUM_EPISODES):
