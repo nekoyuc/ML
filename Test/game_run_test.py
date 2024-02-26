@@ -3,7 +3,7 @@ import pygame
 from environment import TowerBuildingEnv
 clock = pygame.time.Clock()
 
-env = TowerBuildingEnv(pixel_x = 600, pixel_y = 600, goal_width = 300, goal_height = 200, grid_size = 30, max_joints = 20)
+env = TowerBuildingEnv(screen_x = 600, screen_y = 600, goal_width = 300, goal_height = 250, grid_size = 30, max_joints = 20)
 
 
 while True:

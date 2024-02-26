@@ -1,6 +1,6 @@
 import gym
 import pygame
-from Box2D import (b2World, b2PolygonShape, b2_dynamicBody, b2DistanceJointDef, b2WeldJointDef)
+from Box2D import (b2World, b2PolygonShape, b2CircleShape, b2_dynamicBody, b2DistanceJointDef, b2WeldJointDef)
 import random
 import numpy as np
 env = gym.make('CartPole-v0')
@@ -14,19 +14,19 @@ import torch.optim as optim
 class TowerBuildingEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, pixel_x, pixel_y, goal_width, goal_height, grid_size, max_joints):
+    def __init__(self, screen_x, screen_y, goal_width, goal_height, grid_size, max_joints):
         # 1. Pygame Initialization
         pygame.init()
 
         # 2. Box2D World Initialization
         self.world = b2World(gravity=(0, -10), doSleep=True) # Box2D world
-        self.screen = pygame.display.set_mode((pixel_x, pixel_y))
+        self.screen = pygame.display.set_mode((screen_x, screen_y))
         # ... Load game assets, etc...
         self.goal_width = goal_width
         self.goal_height = goal_height
         self.max_joints = max_joints
         self.grid_size = grid_size
-        self.cell_size = (pixel_x // grid_size, pixel_y // grid_size)
+        self.cell_size = (screen_x // grid_size, screen_y // grid_size) # pixels per grid cell
         self.clock = pygame.time.Clock()
 
         self.block_colors = [(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for _ in range(100)]
@@ -39,6 +39,8 @@ class TowerBuildingEnv(gym.Env):
 
         self.tower_grid = np.zeros((goal_width, goal_height))
 
+        self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # pixels
+
 
         # ... Create Box2D bodies, fixtures, joints, etc...
 
@@ -50,7 +52,8 @@ class TowerBuildingEnv(gym.Env):
         # Place the first block
         new_body = self.world.CreateDynamicBody(
             position=(300/self.ppm, 2/self.ppm),
-            angle=random.choice([0, 45, 90]) * (np.pi / 180),
+            #angle=random.choice([0, 45, 90]) * (np.pi / 180),
+            angle=random.choice([0, 90]) * (np.pi / 180),
         )
         new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
         self.blocks.append(new_block)
@@ -64,7 +67,7 @@ class TowerBuildingEnv(gym.Env):
 
         for grid_x in range(self.grid_size):
             for grid_y in range(self.grid_size):
-                if self.is_valid_placement(grid_x, grid_y, max_distance=2):
+                if self.is_valid_placement(grid_x, grid_y, max_distance=3):
                     valid_cells.append((grid_x, grid_y))
 
         if valid_cells:
@@ -74,8 +77,7 @@ class TowerBuildingEnv(gym.Env):
             pass
         
         # block_x and block_y come from action
-        block_x_coord = grid_x * self.cell_size[0] + self.cell_size[0] // 2
-        block_y_coord = grid_y * self.cell_size[1] + self.cell_size[1] // 2
+        block_x_coord, block_y_coord = self.grid_to_world_coords(grid_x, grid_y)
 
         new_body = self.world.CreateDynamicBody(
             position=(block_x_coord/self.ppm, block_y_coord/self.ppm),
@@ -92,13 +94,31 @@ class TowerBuildingEnv(gym.Env):
         info = [] # Additional information (e.g. for debugging)
         return new_observation, reward, done
 
-    def is_valid_placement(self, grid_x, grid_y, max_distance = 2):
+    def is_valid_placement(self, grid_x, grid_y, max_distance = 3):
+        grid_x_coord, grid_y_coord = self.grid_to_world_coords(grid_x, grid_y)
+        # Create a temporary fixture representing the potential new block
+        '''
+        potential_block_fixture = b2FixtureDef(
+            shape = b2CircleShape(radius=self.block_radius/self.ppm),
+            density = 1,
+            friction = 0.3
+        )
+        '''
+
+        for existing_fixture in self.blocks:
+            block_x_coord, block_y_coord = existing_fixture.body.position * self.ppm
+            distance = np.linalg.norm((block_x_coord - grid_x_coord, block_y_coord - grid_y_coord)) # pixel
+            if distance >= self.block_radius * 2 and distance < max_distance * self.cell_size[0]:
+                return True
+        return False
+    '''
         grid_x_coord, grid_y_coord = self.grid_to_world_coords(grid_x, grid_y)
         for existing_block in self.blocks:
             block_x_coord, block_y_coord = existing_block.body.position * self.ppm
             if abs(block_x_coord - grid_x_coord) < max_distance * self.cell_size[0] and abs(block_y_coord - grid_y_coord) < max_distance * self.cell_size[1]:
                 return True
         return False
+        '''
     
     def get_random_color(self):
         r = random.randint(0, 255)
@@ -214,7 +234,7 @@ class TowerBuildingEnv(gym.Env):
 
         # Example: Draw the ground plane
         ground_y = self.ground.position.y  # Assuming the ground is at y=0
-        #pygame.draw.rect(self.screen, (100, 100, 100), (0, ground_y, self.pixel_x, self.pixel_y - ground_y))
+        #pygame.draw.rect(self.screen, (100, 100, 100), (0, ground_y, self.screen_x, self.screen_y - ground_y))
 
         # Draw blocks 
         for i, block in enumerate(self.blocks):
