@@ -1,12 +1,11 @@
 import gym
 import pygame
-from Box2D import (b2World, b2PolygonShape, b2CircleShape, b2_dynamicBody, b2DistanceJointDef, b2WeldJointDef)
+from Box2D import (b2World, b2PolygonShape, b2CircleShape, b2_dynamicBody, b2DistanceJointDef, b2WeldJointDef, b2, b2FixtureDef)
 import random
 import numpy as np
 env = gym.make('CartPole-v0')
 
 import torch
-from Box2D import b2FixtureDef
 import random
 import torch.nn as nn
 import torch.optim as optim
@@ -26,7 +25,7 @@ class TowerBuildingEnv(gym.Env):
         self.goal_height = goal_height
         self.max_joints = max_joints
         self.grid_size = grid_size
-        self.cell_size = (screen_x // grid_size, screen_y // grid_size) # pixels per grid cell
+        self.cell_size = (screen_x // grid_size, screen_y // grid_size) # (20, 20) pixels per grid cell
         self.clock = pygame.time.Clock()
 
         self.block_colors = [(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for _ in range(100)]
@@ -39,7 +38,7 @@ class TowerBuildingEnv(gym.Env):
 
         self.tower_grid = np.zeros((goal_width, goal_height))
 
-        self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # pixels
+        self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # 22.3 pixels
 
 
         # ... Create Box2D bodies, fixtures, joints, etc...
@@ -66,8 +65,8 @@ class TowerBuildingEnv(gym.Env):
         valid_cells = []  # Store the coordinates of valid cells
 
         for grid_x in range(self.grid_size):
-            for grid_y in range(self.grid_size):
-                if self.is_valid_placement(grid_x, grid_y, max_distance=3):
+            for grid_y in range(1, self.grid_size):
+                if self.is_valid_placement(grid_x, grid_y, max_distance=85):
                     valid_cells.append((grid_x, grid_y))
 
         if valid_cells:
@@ -94,23 +93,35 @@ class TowerBuildingEnv(gym.Env):
         info = [] # Additional information (e.g. for debugging)
         return new_observation, reward, done
 
-    def is_valid_placement(self, grid_x, grid_y, max_distance = 3):
+    def is_valid_placement(self, grid_x, grid_y, max_distance):
         grid_x_coord, grid_y_coord = self.grid_to_world_coords(grid_x, grid_y)
         # Create a temporary fixture representing the potential new block
-        '''
-        potential_block_fixture = b2FixtureDef(
-            shape = b2CircleShape(radius=self.block_radius/self.ppm),
-            density = 1,
-            friction = 0.3
+        
+        potential_block_body = self.world.CreateDynamicBody(
+            position=(grid_x_coord/self.ppm, grid_y_coord/self.ppm)
         )
+        
+        # Create a temporary circular fixture attached to the potential block body
+        potential_block_fixture = potential_block_body.CreateCircleFixture(radius=55/self.ppm, density=1, friction=0.3)
+        
+        for existing_fixture in self.blocks:
+            block_x_coord, block_y_coord = existing_fixture.body.position * self.ppm
+            distance = np.linalg.norm((block_x_coord - grid_x_coord, block_y_coord - grid_y_coord)) # pixel
+            if not self.fixtures_overlap(potential_block_fixture, existing_fixture) and distance < max_distance:
+                # Clean up the temporary fixture and body
+                self.world.DestroyBody(potential_block_body)
+                return True
+        # Clean up the temporary fixture and body
+        self.world.DestroyBody(potential_block_body)
+        return False
         '''
-
         for existing_fixture in self.blocks:
             block_x_coord, block_y_coord = existing_fixture.body.position * self.ppm
             distance = np.linalg.norm((block_x_coord - grid_x_coord, block_y_coord - grid_y_coord)) # pixel
             if distance >= self.block_radius * 2 and distance < max_distance * self.cell_size[0]:
                 return True
         return False
+    '''
     '''
         grid_x_coord, grid_y_coord = self.grid_to_world_coords(grid_x, grid_y)
         for existing_block in self.blocks:
@@ -120,6 +131,13 @@ class TowerBuildingEnv(gym.Env):
         return False
         '''
     
+
+    
+    def fixtures_overlap(self, fixture1, fixture2):
+        # ... Check if fixture1 and fixture2 overlap ...
+        overlap = b2.testOverlap(fixture1.shape, 0, fixture2.shape, 0, fixture1.body.transform, fixture2.body.transform)
+        return overlap
+
     def get_random_color(self):
         r = random.randint(0, 255)
         g = random.randint(0, 255)
