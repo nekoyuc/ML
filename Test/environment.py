@@ -66,13 +66,14 @@ class TowerBuildingEnv(gym.Env):
 
         for grid_x in range(self.grid_size):
             for grid_y in range(1, self.grid_size):
-                if self.is_valid_placement(grid_x, grid_y, max_distance=85):
+                if self.is_valid_placement(grid_x, grid_y, max_distance_squared=5000):
                     valid_cells.append((grid_x, grid_y))
 
         if valid_cells:
             grid_x, grid_y = random.choice(valid_cells)
             valid_placement_found = True
         if not valid_placement_found:
+            print("No valid placement found")
             pass
         
         # block_x and block_y come from action
@@ -91,47 +92,75 @@ class TowerBuildingEnv(gym.Env):
         reward = self.calcualte_reward() # Calculate reward based on new state and goals
         done = self.check_done() # Check if episode is done (e.g. if agent fell off the screen, etc...)
         info = [] # Additional information (e.g. for debugging)
-        return new_observation, reward, done
+        #return new_observation, reward, done
 
-    def is_valid_placement(self, grid_x, grid_y, max_distance):
+    def is_valid_placement(self, grid_x, grid_y, max_distance_squared):
         grid_x_coord, grid_y_coord = self.grid_to_world_coords(grid_x, grid_y)
         # Create a temporary fixture representing the potential new block
-        
+
         potential_block_body = self.world.CreateDynamicBody(
             position=(grid_x_coord/self.ppm, grid_y_coord/self.ppm)
         )
         
         # Create a temporary circular fixture attached to the potential block body
-        potential_block_fixture = potential_block_body.CreateCircleFixture(radius=55/self.ppm, density=1, friction=0.3)
-        
-        for existing_fixture in self.blocks:
-            block_x_coord, block_y_coord = existing_fixture.body.position * self.ppm
-            distance = np.linalg.norm((block_x_coord - grid_x_coord, block_y_coord - grid_y_coord)) # pixel
-            if not self.fixtures_overlap(potential_block_fixture, existing_fixture) and distance < max_distance:
-                # Clean up the temporary fixture and body
+        p_f = potential_block_body.CreateCircleFixture(radius=50/self.ppm, density=1, friction=0.3)
+        # Render the potential block
+
+        closest = 360000.0
+        for e in self.blocks:
+            if self.fixtures_overlap(p_f, e):
                 self.world.DestroyBody(potential_block_body)
-                return True
-        # Clean up the temporary fixture and body
+                return False
+            else:
+                block_x_coord, block_y_coord = self.grid_to_world_coords(e.body.position.x, e.body.position.y)
+                distance_squared = (block_x_coord - grid_x_coord) ** 2 + (block_y_coord - grid_y_coord) ** 2
+                closest =  min(distance_squared, closest)
+        
+        if closest < max_distance_squared:
+            print("Closest: ", closest)
+            self.world.DestroyBody(potential_block_body)
+            return True
+        else:
+            self.world.DestroyBody(potential_block_body)
+            return False
+        '''
+        for e in self.blocks:
+            #block_x_coord, block_y_coord = self.grid_to_world_coords(e.body.position.x, e.body.position.y)
+            #distance = np.linalg.norm((block_x_coord - grid_x_coord, block_y_coord - grid_y_coord)) # pixel
+            
+            if self.fixtures_overlap(p_f, e):
+                self.world.DestroyBody(potential_block_body)
+                return False
+            else:
+                for fixture in self.blocks:
+                    block_x_coord, block_y_coord = fixture.body.position * self.ppm
+                    distance = np.linalg.norm((block_x_coord - grid_x_coord, block_y_coord - grid_y_coord))
+                    if distance < max_distance:
+                        self.world.DestroyBody(potential_block_body)
+                        return True
         self.world.DestroyBody(potential_block_body)
         return False
         '''
+
+        '''
+        # Clean up the temporary fixture and body
+        self.world.DestroyBody(potential_block_body)
+        return is_valid
+
         for existing_fixture in self.blocks:
             block_x_coord, block_y_coord = existing_fixture.body.position * self.ppm
             distance = np.linalg.norm((block_x_coord - grid_x_coord, block_y_coord - grid_y_coord)) # pixel
             if distance >= self.block_radius * 2 and distance < max_distance * self.cell_size[0]:
                 return True
         return False
-    '''
-    '''
+
         grid_x_coord, grid_y_coord = self.grid_to_world_coords(grid_x, grid_y)
         for existing_block in self.blocks:
             block_x_coord, block_y_coord = existing_block.body.position * self.ppm
             if abs(block_x_coord - grid_x_coord) < max_distance * self.cell_size[0] and abs(block_y_coord - grid_y_coord) < max_distance * self.cell_size[1]:
                 return True
         return False
-        '''
-    
-
+    '''
     
     def fixtures_overlap(self, fixture1, fixture2):
         # ... Check if fixture1 and fixture2 overlap ...
