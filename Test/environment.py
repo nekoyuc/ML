@@ -117,51 +117,12 @@ class TowerBuildingEnv(gym.Env):
                 closest =  min(distance_squared, closest)
         
         if closest < max_distance_squared:
-            print("Closest: ", closest)
             self.world.DestroyBody(potential_block_body)
             return True
         else:
             self.world.DestroyBody(potential_block_body)
             return False
-        '''
-        for e in self.blocks:
-            #block_x_coord, block_y_coord = self.grid_to_world_coords(e.body.position.x, e.body.position.y)
-            #distance = np.linalg.norm((block_x_coord - grid_x_coord, block_y_coord - grid_y_coord)) # pixel
-            
-            if self.fixtures_overlap(p_f, e):
-                self.world.DestroyBody(potential_block_body)
-                return False
-            else:
-                for fixture in self.blocks:
-                    block_x_coord, block_y_coord = fixture.body.position * self.ppm
-                    distance = np.linalg.norm((block_x_coord - grid_x_coord, block_y_coord - grid_y_coord))
-                    if distance < max_distance:
-                        self.world.DestroyBody(potential_block_body)
-                        return True
-        self.world.DestroyBody(potential_block_body)
-        return False
-        '''
 
-        '''
-        # Clean up the temporary fixture and body
-        self.world.DestroyBody(potential_block_body)
-        return is_valid
-
-        for existing_fixture in self.blocks:
-            block_x_coord, block_y_coord = existing_fixture.body.position * self.ppm
-            distance = np.linalg.norm((block_x_coord - grid_x_coord, block_y_coord - grid_y_coord)) # pixel
-            if distance >= self.block_radius * 2 and distance < max_distance * self.cell_size[0]:
-                return True
-        return False
-
-        grid_x_coord, grid_y_coord = self.grid_to_world_coords(grid_x, grid_y)
-        for existing_block in self.blocks:
-            block_x_coord, block_y_coord = existing_block.body.position * self.ppm
-            if abs(block_x_coord - grid_x_coord) < max_distance * self.cell_size[0] and abs(block_y_coord - grid_y_coord) < max_distance * self.cell_size[1]:
-                return True
-        return False
-    '''
-    
     def fixtures_overlap(self, fixture1, fixture2):
         # ... Check if fixture1 and fixture2 overlap ...
         overlap = b2.testOverlap(fixture1.shape, 0, fixture2.shape, 0, fixture1.body.transform, fixture2.body.transform)

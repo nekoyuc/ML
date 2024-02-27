@@ -30,29 +30,4 @@ while True:
         print(f"win!")
         break
 
-'''
-while True:
-    env.world.Step(1/60, 6, 2)
-    if stop == False:
-        for _ in range(100):
-            action = env.action_space.sample()
-            new_obs, reward, done = env.step(action)
-            print(f"Observation: {new_obs}, Reward: {reward}, Done: {done}")
-            if done:
-                env.reset()
-    env.render()
-    pygame.display.flip()
-    print(f"env.calculate_stability(): {env.calculate_stability()}")
-    clock.tick(60)
-    stop = True
-
-for _ in range(100):
-    action = env.action_space.sample()
-    new_obs, reward, done = env.step(action)
-    env.render()
-    print(f"Episode Step: {_}, Observation: {new_obs}")
-    if done:
-        env.reset()
-'''
-
 #env.close()
