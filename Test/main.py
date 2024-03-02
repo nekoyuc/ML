@@ -28,6 +28,13 @@ class TowerQNetWork(nn.Module): # Inherit from nn.Module
     def __init__(self, observation_space, action_space):
         super(TowerQNetWork, self).__init__()
         # ... Your network layers ...
+
+        self.conv1 = nn.Conv2d(...)
+        self.conv2 = nn.Conv2d(...)
+
+        self.fc1 = nn.Linear(...)
+        self.output = nn.Linear(..., action_space.nvec.sun())
+
         self.layers = nn.Sequential(
             nn.Linear(observation_space, 128),
             nn.ReLU(),
@@ -38,6 +45,11 @@ class TowerQNetWork(nn.Module): # Inherit from nn.Module
     def forward(self, x):
         # ... (Your forward pass logic here) ...
         #return action_values # Or policy output, depending on your RL algorithm
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+
+        x = F.relu(self.fc1(x))
+        x = self.output(x)
         return self.layers(x)
 
 model = TowerQNetWork(env.observation_space, env.action_space)
@@ -47,18 +59,31 @@ model = TowerQNetWork(env.observation_space, env.action_space)
 # Initialize Q-Table - You'll need a way to map states and actions to Q-values
 num_states = ... # Calculate based on observation space encoding
 num_actions = ... # Calculate based on action space encoding
-#Q_table = np.zeros([num_states, num_actions])
+
+# Q_table = np.zeros([num_states, num_actions])
 q_values = model(torch.tensor(env.reset()).float())
 
 # Training loop
 for episode in range(NUM_EPISODES):
     observation = env.reset()
+    screen = env.get_screen()
+    screen_tensor = torch.from_numpy(np.array(screen)).float().div(255.0).unsqueeze(0)
     done = False
 
     while not done:
         # ... (Main training loop logic as before) ...
-        action = model(observation)
+        action = select_action(state, model, epsilon)
+        
+        # Execute action in the environment
         next_observation, reward, done, _ = env.step(action)
+        new_state = preprocess_image(new_observation)
+
+        # Store experience in replay buffer
+        replay_buffer.push(state, action, reward, new_state, done)
+
+        if len(replay_buffer) > BATCH_SIZE:
+            # Train model
+            loss = update_dqn(model, optimizer, replay_buffer)
+
         # ... (Main training loop logic as before) ...
-        observation = next_observation
-    # ... (Main training loop logic as before) ...
+        state = new_state # Update state for next iteration

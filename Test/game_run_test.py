@@ -19,13 +19,15 @@ while True:
         
         #print(f"env.calculate_stability(): {env.calculate_stability()}")
         stop = True
+    env.update_width_height()
     new_obs = env.get_observation()
     reward = env.calcualte_reward()
     done = env.check_done()
     # print current time
+    env.get_screen()
     current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"Current time: {current_time}")
-    print(f"Observation: {new_obs}, Reward: {reward}, Done: {done}\n")
+    print(f"Observation: width is {env.width}, height is {env.height}, Reward: {reward}, Done: {done}\n")
     if done:
         print(f"win!")
         break

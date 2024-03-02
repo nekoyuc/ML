@@ -3,6 +3,8 @@ import pygame
 from Box2D import (b2World, b2PolygonShape, b2CircleShape, b2_dynamicBody, b2DistanceJointDef, b2WeldJointDef, b2, b2FixtureDef)
 import random
 import numpy as np
+import os
+import platform
 env = gym.make('CartPole-v0')
 
 import torch
@@ -38,8 +40,16 @@ class TowerBuildingEnv(gym.Env):
 
         self.tower_grid = np.zeros((goal_width, goal_height))
 
-        self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # 22.3 pixels
+        self.image_index = 0
 
+        self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # 22.3 pixels
+        
+        self.max_height_coord = 0
+        self.min_x_coord = screen_x/2
+        self.max_x_coord = screen_x/2
+
+        self.width = 0
+        self.height = 0
 
         # ... Create Box2D bodies, fixtures, joints, etc...
 
@@ -50,12 +60,17 @@ class TowerBuildingEnv(gym.Env):
 
         # Place the first block
         new_body = self.world.CreateDynamicBody(
-            position=(300/self.ppm, 2/self.ppm),
+            position=(screen_x/self.ppm/2, 2/self.ppm),
             #angle=random.choice([0, 45, 90]) * (np.pi / 180),
             angle=random.choice([0, 90]) * (np.pi / 180),
         )
         new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
         self.blocks.append(new_block)
+
+        self.new_block = new_block
+
+        self.update_width_height()
+
         
     def step(self, action):
         # 4. Execute action (e.g. apply forces to Box2D bodies, etc...)
@@ -85,6 +100,7 @@ class TowerBuildingEnv(gym.Env):
         )
         new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
         self.blocks.append(new_block)
+        self.new_block = new_block
         # self.tower_grid[grid_y, grid_x] # Mark the grid cell as occupied
 
         # 6. Observation:
@@ -138,50 +154,26 @@ class TowerBuildingEnv(gym.Env):
         return grid_x * self.cell_size[0] + self.cell_size[0] // 2, grid_y * self.cell_size[1] + self.cell_size[1] // 2
 
     def get_observation(self):
-        # Build observation vector: block positions, tower height/width, joint info...
-        # ... get current tower state ...
-        # ... get target tower shape ...
-        # ... get joint usage ifo ...
-        # ... get block count ...
-        max_height_coord = 0
-        min_x_coord, max_x_coord = float('inf'), -float('inf') # Initialize for finding width boundaries
-        for block in self.blocks:
-            leftest_vertex = float('inf')
-            rightest_vertex = -float('inf')
-            highest_vertex = -float('inf')
-
-            for block in self.blocks:
-                for vertex in block.shape.vertices:
-                    x_coord, y_coord = block.body.transform * vertex * self.ppm
-                    leftest_vertex = min(leftest_vertex, x_coord)
-                    rightest_vertex = max(rightest_vertex, x_coord)
-                    highest_vertex = max(highest_vertex, y_coord)
-
-            highest_vertex = highest_vertex  # Convert y-coordinate to screen coordinates
-
-            '''
-            leftest_vertex /= self.ppm  # Convert x-coordinate to world coordinates
-            rightest_vertex /= self.ppm  # Convert x-coordinate to world coordinates
-
-            leftest_vertex = int(leftest_vertex)
-            rightest_vertex = int(rightest_vertex)
-            highest_vertex = int(highest_vertex)
-
-            grid_x_coord, grid_y_coord = block.body.position
-            max_height_coord = max(max_height_coord, grid_y_coord)
-            min_x_coord = min(min_x_coord, grid_x_coord)
-            max_x_coord = max(max_x_coord, grid_x_coord)
-            '''
-            max_height_coord = max(max_height_coord, highest_vertex)
-            min_x_coord = min(min_x_coord, leftest_vertex)
-            max_x_coord = max(max_x_coord, rightest_vertex)
-        
-        width = (max_x_coord - min_x_coord)
-        height = max_height_coord
         num_blocks = len(self.blocks)
-
-        return np.array([width, height, num_blocks])
+        return num_blocks
     
+    def update_width_height(self):
+        leftest_vertex = float('inf')
+        rightest_vertex = -float('inf')
+        highest_vertex = -float('inf')
+        for vertext in self.new_block.shape.vertices:
+            new_x_coord, new_y_coord = self.new_block.body.transform * vertext * self.ppm
+            leftest_vertex = min(leftest_vertex, new_x_coord)
+            rightest_vertex = max(rightest_vertex, new_x_coord)
+            highest_vertex = max(highest_vertex, new_y_coord)
+        
+        self.max_height_coord = max(self.max_height_coord, highest_vertex)
+        self.min_x_coord = min(self.min_x_coord, leftest_vertex)
+        self.max_x_coord = max(self.max_x_coord, rightest_vertex)
+
+        self.width = (self.max_x_coord - self.min_x_coord)
+        self.height = self.max_height_coord
+
     def calcualte_reward(self):
         # ... Calculate reward based on current state and goals
         progress_reward = self.calculate_progress()
@@ -191,8 +183,7 @@ class TowerBuildingEnv(gym.Env):
         return progress_reward + stability_reward + win_bonus + block_efficiency
     
     def calculate_progress(self):
-        [width, height] = self.get_observation()[:2]
-        current_volume = width * height
+        current_volume = self.width * self.height
         target_volume = self.goal_width * self.goal_height
         volume_difference = abs(target_volume - current_volume)
         progress_reward = 1.0 / (1 + volume_difference)
@@ -212,7 +203,7 @@ class TowerBuildingEnv(gym.Env):
         return [average_speed, max_speed]
 
     def calculate_efficiency(self):
-        num_blocks = self.get_observation()[2]
+        num_blocks = self.get_observation()
         return -0.01 * num_blocks
     
     def check_done(self):
@@ -226,14 +217,46 @@ class TowerBuildingEnv(gym.Env):
         # Did the tower reach the goal?
         # ... Compare 'self.tower_grid' (or your representation) to 'self.target_tower'...
         win = False
-        width, height = self.get_observation()[:2]
-        #if width >= self.goal_width and height >= self.goal_height:
-        if height >= self.goal_height:
+        if self.width >= self.goal_width and self.height >= self.goal_height:
+        #if height >= self.goal_height:
             win = True
         return win
     
+    def get_screen(self):
+        raw_screen = pygame.surfarray.array3d(self.screen)
+
+        resized_screen = ...
+
+        # export the raw_screen to a file
+        pygame.image.save(self.screen, f'screenshot_{self.image_index}.png')
+        self.image_index += 1
+
+        print("screenshot saved")
+        print("Directory:", os.getcwd())
+        return resized_screen
+
     def reset(self):
-        # ... Reset Box2D world, get initial observations, etc...
+        self.blocks = []
+
+        self.max_height_coord = 0
+        self.min_x_coord = screen_x/2
+        self.max_x_coord = screen_x/2
+        self.width = 0
+        self.height = 0
+        self.image_index = 0
+
+        # Place the first block
+        new_body = self.world.CreateDynamicBody(
+            position=(screen_x/self.ppm/2, 2/self.ppm),
+            #angle=random.choice([0, 45, 90]) * (np.pi / 180),
+            angle=random.choice([0, 90]) * (np.pi / 180),
+        )
+        new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
+        self.blocks.append(new_block)
+
+        self.new_block = new_block
+        self.update_width_height()
+        # Get initial observations
         return self.get_observation()
     
     def render(self):
