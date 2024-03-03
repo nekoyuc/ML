@@ -18,20 +18,17 @@ while True:
     env.update_records()
     env.get_screen()
 
-    reward = env.current_score
     done = env.check_done()
 
-    
-    
     # print current time
     #current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     #print(f"Current time: {current_time}")
-    print(f"Observation: width is {env.width:.4f}, height is {env.height:.4f}, Reward: {reward:.4f}")
 
     progress = env.calculate_progress()
     stability = env.calculate_stability()[2]
     efficiency = env.calculate_efficiency()
-    print(f"Progress: {progress:.4f}, Stability: {stability:.4f}, Efficiency: {efficiency:.4f}\n")
+    score = env.current_score
+    print(f"Progress: {progress:.4f}, Stability: {stability:.4f}, Efficiency: {efficiency:.4f}, Score: {score:.4f}\n")
     if done:
         print(f"win!")
         break

@@ -62,11 +62,12 @@ class TowerBuildingEnv(gym.Env):
         self.action_space = gym.spaces.Box(low = -1.0, high = 1.0, shape = (2,))
 
         ### Score function parameters
-        # width reward = -alpha * (width - goal_width)
-        # height reward = beta * height ^ theta
+        # width reward = sigma * (goal_width ^ alpha - (width - goal_width) ^ alpha), alpha > 1, sigma > 0
+        # height reward = beta * height ^ theta, thea > 1
         # stability punishment = gamma * (average_speed + max_speed)
         # efficiency punishment = delta * block_num
-        self.alpha = 0.005
+        self.alpha = 1.5
+        self.sigma = 0.0001
         self.beta = 0.0001
         self.theta = 2
         self.gamma = -0.01
@@ -101,23 +102,6 @@ class TowerBuildingEnv(gym.Env):
                 valid_placement_found = True
                 break
         
-        '''
-        for grid_x in range(self.grid_size):
-            for grid_y in range(1, self.grid_size):
-                if self.is_valid_placement(grid_x, grid_y, max_distance_squared=5000):
-                    valid_cells.append((grid_x, grid_y))
-
-        if valid_cells:
-            grid_x, grid_y = random.choice(valid_cells)
-            valid_placement_found = True
-        if not valid_placement_found:
-            print("No valid placement found")
-            pass
-        
-        # block_x and block_y come from action
-        block_x_coord, block_y_coord = self.grid_to_world_coords(grid_x, grid_y)
-        '''
-
         if valid_placement_found:
             self.place_block(block_x_coord, block_y_coord)
         else:
@@ -180,21 +164,6 @@ class TowerBuildingEnv(gym.Env):
                 self.min_x_coord = min(self.min_x_coord, x_coord)
                 self.max_x_coord = max(self.max_x_coord, x_coord)
 
-        '''
-        leftest_vertex = float('inf')
-        rightest_vertex = -float('inf')
-        highest_vertex = -float('inf')
-        for vertext in self.new_block.shape.vertices:
-            new_x_coord, new_y_coord = self.new_block.body.transform * vertext * self.ppm
-            leftest_vertex = min(leftest_vertex, new_x_coord)
-            rightest_vertex = max(rightest_vertex, new_x_coord)
-            highest_vertex = max(highest_vertex, new_y_coord)
-        
-        self.max_h_coord = max(self.max_h_coord, highest_vertex)
-        self.min_x_coord = min(self.min_x_coord, leftest_vertex)
-        self.max_x_coord = max(self.max_x_coord, rightest_vertex)
-        '''
-
         self.width = (self.max_x_coord - self.min_x_coord)
         self.height = self.max_h_coord
 
@@ -208,9 +177,10 @@ class TowerBuildingEnv(gym.Env):
         self.records.append((self.steps, self.current_score, self.width, self.height))
 
     def calculate_progress(self):
-        progress_x = - self.alpha * (self.width - self.goal_width)
+        progress_x = self.sigma * (self.goal_width ** self.alpha - (self.width - self.goal_width) ** self.alpha)
         progress_y = self.beta * (self.height ** self.theta)
-        print(f"Height: {self.height}, progress_y: {progress_y}\n")
+        print(f"Width: {self.width:.0f}, progress_x: {progress_x:.4f}")
+        print(f"Height: {self.height:.0f}, progress_y: {progress_y:.4f}\n")
         return progress_x + progress_y
     
     def calculate_stability(self):
@@ -310,8 +280,8 @@ class TowerBuildingEnv(gym.Env):
     def reset(self):
         # Coordinates calculation helper parameters
         self.max_h_coord = 0
-        self.min_x_coord = screen_x/2
-        self.max_x_coord = screen_x/2
+        self.min_x_coord = self.screen_x/2
+        self.max_x_coord = self.screen_x/2
         
         # State variables
         self.width = 0
