@@ -2,7 +2,6 @@ import pygame
 from environment import TowerBuildingEnv
 import datetime
 
-clock = pygame.time.Clock()
 env = TowerBuildingEnv(screen_x = 600, screen_y = 600, goal_width = 300, goal_height = 250, grid_size = 30, max_joints = 20)
 
 while True:
@@ -11,7 +10,7 @@ while True:
     #env.step(action)
     while stop == False or env.calculate_stability()[1] >= 0.01:
         env.world.Step(1/60, 6, 2)
-        clock.tick(5000)
+        env.clock.tick(5000)
         env.render()
         pygame.display.flip()
         stop = True
@@ -23,7 +22,7 @@ while True:
     reward = env.current_score
     done = env.check_done()
 
-    env.step(action)
+    
     
     # print current time
     #current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -37,5 +36,7 @@ while True:
     if done:
         print(f"win!")
         break
+
+    env.step(action)
 
 #env.close()

@@ -1,26 +1,33 @@
 import gym
+import pygame
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+from torch.utils.data import DataLoader
+import random
 from environment import TowerBuildingEnv
 
 # ... Other RL algorithm imports ...
 
-# Hyperparameters
-GOAL_WIDTH = 5
-GOAL_HEIGHT = 20
+# Environment parameters
+SCREEN_X = 600
+SCREEN_Y = 600
+GOAL_WIDTH = 300
+GOAL_HEIGHT = 250
 GRID_SIZE = 30
 MAX_JOINTS = 20
+
 NUM_EPISODES = 1000
 MAX_STEPS_PER_EPISODE = 1000
-LEARNING_RATE = 0.1
+
+# Hyperparameters
+LEARNING_RATE = 0.001
 DISCOUNT_FACTOR = 0.95
+REPLAY_BUFFER_SIZE = 10000
 EPSILON = 1.0 # Initial exploration rate
 EPSILON_DECAY = 0.995 # How quickly exploration decreases
-
-# Create environment instance
-env = TowerBuildingEnv(goal_width=GOAL_WIDTH, goal_height=GOAL_HEIGHT, grid_size=GRID_SIZE, max_joints=MAX_JOINTS)
+BATCH_SIZE = 1000
 
 # Define your RL Agent
 class TowerQNetWork(nn.Module): # Inherit from nn.Module
@@ -29,61 +36,70 @@ class TowerQNetWork(nn.Module): # Inherit from nn.Module
         super(TowerQNetWork, self).__init__()
         # ... Your network layers ...
 
-        self.conv1 = nn.Conv2d(...)
-        self.conv2 = nn.Conv2d(...)
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=5, stride=2) # Assuming input is a 1-channel image
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=2) # Assuming input is a 1-channel image
 
-        self.fc1 = nn.Linear(...)
-        self.output = nn.Linear(..., action_space.nvec.sun())
+        # Calculate size of the convolutional layers' output (adjust based on your layers)
+        conv_out_size = self._get_conv_out_size((84, 84))
 
-        self.layers = nn.Sequential(
-            nn.Linear(observation_space, 128),
-            nn.ReLU(),
-            nn.Linear(128, 903), # Output for block placement (900) + angle choice (3)
-            nn.Linear(903, 9) # Joint decision (1 binary + 8 locations)
-        )
+        # Fully connected layers
+        self.fc1 = nn.Linear(conv_out_size, 64)
+        self.fc2 = nn.Linear(64, env.action_space.shape[0])
+    
+    def _get_conv_out_size(self, shape):
+        dummy_output = self.forward(torch.zeros(1, 1, *shape))
+        return dummy_output.data_view(1, -1).size(1)
 
     def forward(self, x):
         # ... (Your forward pass logic here) ...
         #return action_values # Or policy output, depending on your RL algorithm
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
+        x = torch.relu(self.conv1(x))
+        x = torch.relu(self.conv2(x))
 
-        x = F.relu(self.fc1(x))
-        x = self.output(x)
-        return self.layers(x)
+        x = x.view(x.size(0), -1)
+        x = torch.relu(self.fc1(x))
+        return self.fc2(x)
 
-model = TowerQNetWork(env.observation_space, env.action_space)
+model = TowerQNetWork()
+optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+replay_buffer = ReplayBuffer(REPLAY_BUFFER_SIZE)
 
-# ... Set up RL algorithm, optimizer, etc ...
 
-# Initialize Q-Table - You'll need a way to map states and actions to Q-values
-num_states = ... # Calculate based on observation space encoding
-num_actions = ... # Calculate based on action space encoding
-
-# Q_table = np.zeros([num_states, num_actions])
-q_values = model(torch.tensor(env.reset()).float())
+env = TowerBuildingEnv(screen_x = SCREEN_X,
+                        screen_y = SCREEN_Y,
+                        goal_width = GOAL_WIDTH,
+                        goal_height = GOAL_HEIGHT,
+                        grid_size = GRID_SIZE,
+                        max_joints = MAX_JOINTS)
 
 # Training loop
 for episode in range(NUM_EPISODES):
-    observation = env.reset()
-    screen = env.get_screen()
-    screen_tensor = torch.from_numpy(np.array(screen)).float().div(255.0).unsqueeze(0)
+    env.reset()
     done = False
 
-    while not done:
-        # ... (Main training loop logic as before) ...
-        action = select_action(state, model, epsilon)
-        
-        # Execute action in the environment
-        next_observation, reward, done, _ = env.step(action)
-        new_state = preprocess_image(new_observation)
+    while True:
+        stop = False
+        state = env.get_screen()
+        state = torch.tensor(np.array(state)).unsqueeze(0).float()
+        while stop == False or env.calculate_stability()[1] >= 0.01:
+            env.world.Step(1/60, 6, 2)
+            env.clock.tick(5000)
+            env.render()
+            pygame.display.flip()
+            stop = True
+        env.update_score()
+        env.update_records()
 
-        # Store experience in replay buffer
-        replay_buffer.push(state, action, reward, new_state, done)
+        new_state = env.get_screen()
+        new_state = torch.tensor(np.array(new_state)).unsqueeze(0).float()
+        reward = env.current_score
+        done = env.check_done()
 
-        if len(replay_buffer) > BATCH_SIZE:
-            # Train model
+        replay_buffer.store(state, action, reward, new_state, done)
+        if len(replay_buffer) > BATCH_SIZE
             loss = update_dqn(model, optimizer, replay_buffer)
 
-        # ... (Main training loop logic as before) ...
-        state = new_state # Update state for next iteration
+        if done:
+            break
+        action = select_action(state, model)
+        env.step(action)

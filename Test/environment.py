@@ -18,55 +18,48 @@ class TowerBuildingEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self, screen_x, screen_y, goal_width, goal_height, grid_size, max_joints):
-        # 1. Pygame Initialization
+        # Pygame Initialization
         pygame.init()
 
-        # 2. Box2D World Initialization
+        # Box2D World Initialization
         self.world = b2World(gravity=(0, -10), doSleep=True) # Box2D world
         self.screen = pygame.display.set_mode((screen_x, screen_y))
-        # ... Load game assets, etc...
         self.goal_width = goal_width
         self.goal_height = goal_height
         self.max_joints = max_joints
         self.grid_size = grid_size
         self.cell_size = (screen_x // grid_size, screen_y // grid_size) # (20, 20) pixels per grid cell
         self.clock = pygame.time.Clock()
-
         self.block_colors = [(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for _ in range(100)]
-
         self.ppm = 20.0  # pixels per meter
-        #self.world.Step(1.0 / 60, 6, 2) # 60Hz, 6 velocity iterations, 2 position iterations
-
         self.ground = self.world.CreateStaticBody(position=(0, 0))
         self.ground.CreateEdgeFixture(vertices=[(-1500, 0), (1500, 0)], density=1, friction=0.3)
 
         self.tower_grid = np.zeros((goal_width, goal_height))
 
+        # Image index
         self.image_index = 0
 
+        # Coordinates calculation helper parameters
         self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # 22.3 pixels
         
         self.max_height_coord = 0
         self.min_x_coord = screen_x/2
         self.max_x_coord = screen_x/2
-
+        
+        # State variables
         self.width = 0
         self.height = 0
-
-        # ... Create Box2D bodies, fixtures, joints, etc...
-
         self.blocks = []
-        # Add a list to record score at each step
         self.current_score = 0
         self.steps = 0
+        self.records = [] # (step, score, width, height)
 
-        # (step, score, width, height)
-        self.records = []
-        # 3. Define action and observation spaces
+        # Define action and observation spaces
         self.observation_space = gym.spaces.Box(low=-10, high=10, shape=(4,))
         self.action_space = gym.spaces.Box(low = -1.0, high = 1.0, shape = (2,))
 
-        # Score function parameters
+        ### Score function parameters
         # width reward = -alpha * (width - goal_width)
         # height reward = -beta * height ^ theta
         # stability punishment = gamma * (average_speed + max_speed)
@@ -77,7 +70,6 @@ class TowerBuildingEnv(gym.Env):
         self.gamma = -0.01
         self.delta = -0.005
         
-        
         # Place the first block
         new_body = self.world.CreateDynamicBody(
             position=(screen_x/self.ppm/2, 2/self.ppm),
@@ -86,7 +78,6 @@ class TowerBuildingEnv(gym.Env):
         )
         new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
         self.blocks.append(new_block)
-
         self.new_block = new_block        
         
     def step(self, action):
@@ -289,16 +280,23 @@ class TowerBuildingEnv(gym.Env):
         #pygame.image.save(raw_screen, f'screenshot_{self.image_index}.png')
         self.image_index += 1
 
-        #return resized_screen
+        return resized_screen
 
     def reset(self):
-        self.blocks = []
-
+        # Coordinates calculation helper parameters
         self.max_height_coord = 0
         self.min_x_coord = screen_x/2
         self.max_x_coord = screen_x/2
+        
+        # State variables
         self.width = 0
         self.height = 0
+        self.blocks = []
+        self.current_score = 0
+        self.steps = 0
+        self.records = [] # (step, score, width, height)
+
+        # Image index
         self.image_index = 0
 
         # Place the first block
@@ -309,9 +307,7 @@ class TowerBuildingEnv(gym.Env):
         )
         new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
         self.blocks.append(new_block)
-
         self.new_block = new_block
-        self.records()
     
     def render(self):
         # Clear the screen (Example: Fill with white)
@@ -335,4 +331,3 @@ class TowerBuildingEnv(gym.Env):
 
     def close(self):
         pygame.quit()
-
