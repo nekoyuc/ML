@@ -23,6 +23,8 @@ class TowerBuildingEnv(gym.Env):
 
         # Box2D World Initialization
         self.world = b2World(gravity=(0, -10), doSleep=True) # Box2D world
+        self.screen_x = screen_x
+        self.screen_y = screen_y
         self.screen = pygame.display.set_mode((screen_x, screen_y))
         self.goal_width = goal_width
         self.goal_height = goal_height
@@ -87,6 +89,17 @@ class TowerBuildingEnv(gym.Env):
         valid_placement_found = False
         valid_cells = []  # Store the coordinates of valid cells
 
+        # Randomly choose a number between 0 and 1
+        for i in range(1000):
+            x_coord = self.screen_x * random.random()
+            y_coord = self.screen_y * random.random()
+            i = i + 1
+            if self.is_valid_placement(x_coord, y_coord, max_distance_squared=5000):
+                block_x_coord, block_y_coord = x_coord, y_coord
+                valid_placement_found = True
+                break
+        
+        '''
         for grid_x in range(self.grid_size):
             for grid_y in range(1, self.grid_size):
                 if self.is_valid_placement(grid_x, grid_y, max_distance_squared=5000):
@@ -101,17 +114,23 @@ class TowerBuildingEnv(gym.Env):
         
         # block_x and block_y come from action
         block_x_coord, block_y_coord = self.grid_to_world_coords(grid_x, grid_y)
+        '''
 
-        new_body = self.world.CreateDynamicBody(
-            position=(block_x_coord/self.ppm, block_y_coord/self.ppm),
-            angle=random.choice([0, 45, 90]) * (np.pi / 180),
-        )
-        new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
-        self.blocks.append(new_block)
-        self.new_block = new_block
+        if valid_placement_found:
+            new_body = self.world.CreateDynamicBody(
+                position=(block_x_coord/self.ppm, block_y_coord/self.ppm),
+                angle=random.choice([0, 45, 90]) * (np.pi / 180),
+            )
+            new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
+            self.blocks.append(new_block)
+            self.new_block = new_block
+        else:
+            print("No valid placement found")
+            pass
 
     def is_valid_placement(self, grid_x, grid_y, max_distance_squared):
-        grid_x_coord, grid_y_coord = self.grid_to_world_coords(grid_x, grid_y)
+        grid_x_coord, grid_y_coord = grid_x, grid_y
+        #grid_x_coord, grid_y_coord = self.grid_to_world_coords(grid_x, grid_y)
         # Create a temporary fixture representing the potential new block
 
         potential_block_body = self.world.CreateDynamicBody(

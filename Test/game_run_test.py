@@ -15,8 +15,8 @@ while True:
         pygame.display.flip()
         stop = True
         
-    env.update_score()
     env.update_records()
+    env.update_score()
     env.get_screen()
 
     reward = env.current_score

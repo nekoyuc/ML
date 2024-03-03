@@ -27,7 +27,7 @@ DISCOUNT_FACTOR = 0.95
 REPLAY_BUFFER_SIZE = 10000
 EPSILON = 1.0 # Initial exploration rate
 EPSILON_DECAY = 0.995 # How quickly exploration decreases
-BATCH_SIZE = 1000
+BATCH_SIZE = 100
 
 # Define your RL Agent
 class TowerQNetWork(nn.Module): # Inherit from nn.Module
@@ -80,7 +80,7 @@ for episode in range(NUM_EPISODES):
     while True:
         stop = False
         state = env.get_screen()
-        state = torch.tensor(np.array(state)).unsqueeze(0).float()
+        state = torch.tensor(np.array(state)).unsqueeze(0).float().to(device)
         while stop == False or env.calculate_stability()[1] >= 0.01:
             env.world.Step(1/60, 6, 2)
             env.clock.tick(5000)
