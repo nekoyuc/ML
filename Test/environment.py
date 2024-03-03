@@ -44,6 +44,7 @@ class TowerBuildingEnv(gym.Env):
 
         # Coordinates calculation helper parameters
         self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # 22.3 pixels
+        self.max_vicinity = 5000
         
         self.max_h_coord = 0
         self.min_x_coord = screen_x/2
@@ -60,6 +61,7 @@ class TowerBuildingEnv(gym.Env):
         # Define action and observation spaces
         self.observation_space = gym.spaces.Box(low=-10, high=10, shape=(4,))
         self.action_space = gym.spaces.Box(low = -1.0, high = 1.0, shape = (2,))
+        #self.action_space = gym.spaces.Box(low = np.array((0,0)), high = np.array((screen_x, screen_y), shape = (2,)))
 
         ### Score function parameters
         # width reward = sigma * (goal_width ^ alpha - (width - goal_width) ^ alpha), alpha > 1, sigma > 0
@@ -90,26 +92,32 @@ class TowerBuildingEnv(gym.Env):
         # 5. Update Box2D world, get observations, etc...
 
         valid_placement_found = False
-        valid_cells = []  # Store the coordinates of valid cells
 
         # Randomly choose a number between 0 and 1
         for i in range(1000):
             x_coord = self.screen_x * random.random()
             y_coord = self.screen_y * random.random()
             i = i + 1
+            valid, closest = self.is_valid_placement(x_coord, y_coord)
+            if valid and self.is_close_enough(closest, self.max_vicinity):
+                block_x_coord, block_y_coord = x_coord, y_coord
+                valid_placement_found = True
+                break
+
+            '''
             if self.is_valid_placement(x_coord, y_coord, max_distance_squared=5000):
                 block_x_coord, block_y_coord = x_coord, y_coord
                 valid_placement_found = True
                 break
-        
+                '''
+            
         if valid_placement_found:
             self.place_block(block_x_coord, block_y_coord)
         else:
             print("No valid placement found")
             pass
 
-    def is_valid_placement(self, grid_x, grid_y, max_distance_squared):
-        grid_x_coord, grid_y_coord = grid_x, grid_y
+    def is_valid_placement(self, grid_x_coord, grid_y_coord, max_distance_squared=5000.0):
         # Create a temporary fixture representing the potential new block
         potential_block_body = self.world.CreateDynamicBody(
             position=(grid_x_coord/self.ppm, grid_y_coord/self.ppm)
@@ -122,18 +130,25 @@ class TowerBuildingEnv(gym.Env):
         for e in self.blocks:
             if self.fixtures_overlap(p_f, e):
                 self.world.DestroyBody(potential_block_body)
-                return False
+                return False, closest
             else:
                 block_x_coord, block_y_coord = self.grid_to_world_coords(e.body.position.x, e.body.position.y)
                 distance_squared = (block_x_coord - grid_x_coord) ** 2 + (block_y_coord - grid_y_coord) ** 2
                 closest =  min(distance_squared, closest)
         
+        self.world.DestroyBody(potential_block_body)
+        return True, closest
+        '''
         if closest < max_distance_squared:
             self.world.DestroyBody(potential_block_body)
             return True
         else:
             self.world.DestroyBody(potential_block_body)
             return False
+        '''
+    
+    def is_close_enough(self, distance, max_distance):
+        return distance < max_distance
 
     def fixtures_overlap(self, fixture1, fixture2):
         # ... Check if fixture1 and fixture2 overlap ...
