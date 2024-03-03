@@ -5,12 +5,14 @@ import random
 import numpy as np
 import os
 import platform
+from PIL import Image
 env = gym.make('CartPole-v0')
 
 import torch
 import random
 import torch.nn as nn
 import torch.optim as optim
+import matplotlib.pyplot as plt
 
 class TowerBuildingEnv(gym.Env):
     metadata = {'render.modes': ['human']}
@@ -54,10 +56,28 @@ class TowerBuildingEnv(gym.Env):
         # ... Create Box2D bodies, fixtures, joints, etc...
 
         self.blocks = []
+        # Add a list to record score at each step
+        self.current_score = 0
+        self.steps = 0
+
+        # (step, score, width, height)
+        self.records = []
         # 3. Define action and observation spaces
         self.observation_space = gym.spaces.Box(low=-10, high=10, shape=(4,))
-        self.action_space = gym.spaces.MultiDiscrete([2, 2, 2, 2])
+        self.action_space = gym.spaces.Box(low = -1.0, high = 1.0, shape = (2,))
 
+        # Score function parameters
+        # width reward = -alpha * (width - goal_width)
+        # height reward = -beta * height ^ theta
+        # stability punishment = gamma * (average_speed + max_speed)
+        # efficiency punishment = delta * block_num
+        self.alpha = 0.005
+        self.beta = 0.0001
+        self.theta = 2
+        self.gamma = -0.01
+        self.delta = -0.005
+        
+        
         # Place the first block
         new_body = self.world.CreateDynamicBody(
             position=(screen_x/self.ppm/2, 2/self.ppm),
@@ -67,10 +87,7 @@ class TowerBuildingEnv(gym.Env):
         new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
         self.blocks.append(new_block)
 
-        self.new_block = new_block
-
-        self.update_width_height()
-
+        self.new_block = new_block        
         
     def step(self, action):
         # 4. Execute action (e.g. apply forces to Box2D bodies, etc...)
@@ -101,14 +118,6 @@ class TowerBuildingEnv(gym.Env):
         new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
         self.blocks.append(new_block)
         self.new_block = new_block
-        # self.tower_grid[grid_y, grid_x] # Mark the grid cell as occupied
-
-        # 6. Observation:
-        new_observation = self.get_observation()
-        reward = self.calcualte_reward() # Calculate reward based on new state and goals
-        done = self.check_done() # Check if episode is done (e.g. if agent fell off the screen, etc...)
-        info = [] # Additional information (e.g. for debugging)
-        #return new_observation, reward, done
 
     def is_valid_placement(self, grid_x, grid_y, max_distance_squared):
         grid_x_coord, grid_y_coord = self.grid_to_world_coords(grid_x, grid_y)
@@ -152,12 +161,19 @@ class TowerBuildingEnv(gym.Env):
     
     def grid_to_world_coords(self, grid_x, grid_y):
         return grid_x * self.cell_size[0] + self.cell_size[0] // 2, grid_y * self.cell_size[1] + self.cell_size[1] // 2
+ 
+    def update_score(self):
+        # ... Calculate reward based on current state and goals
+        progress = self.calculate_progress()
+        stability_punishment = self.calculate_stability()[2]
+        #win_bonus = 2 if self.check_win() else 0
+        efficiency_punishment = self.calculate_efficiency()
+        
+        self.current_score = progress + stability_punishment + efficiency_punishment
 
-    def get_observation(self):
-        num_blocks = len(self.blocks)
-        return num_blocks
-    
-    def update_width_height(self):
+    def update_records(self):
+        self.steps += 1
+
         leftest_vertex = float('inf')
         rightest_vertex = -float('inf')
         highest_vertex = -float('inf')
@@ -174,20 +190,12 @@ class TowerBuildingEnv(gym.Env):
         self.width = (self.max_x_coord - self.min_x_coord)
         self.height = self.max_height_coord
 
-    def calcualte_reward(self):
-        # ... Calculate reward based on current state and goals
-        progress_reward = self.calculate_progress()
-        stability_reward = -0.01 * self.calculate_stability()[0] - 0.01 * self.calculate_stability()[1]
-        win_bonus = 2 if self.check_win() else 0
-        block_efficiency = self.calculate_efficiency()
-        return progress_reward + stability_reward + win_bonus + block_efficiency
-    
+        self.records.append((self.steps, self.current_score, self.width, self.height))
+
     def calculate_progress(self):
-        current_volume = self.width * self.height
-        target_volume = self.goal_width * self.goal_height
-        volume_difference = abs(target_volume - current_volume)
-        progress_reward = 1.0 / (1 + volume_difference)
-        return progress_reward
+        progress_x = - self.alpha * (self.width - self.goal_width)
+        progress_y = self.beta * (self.height ** self.theta)
+        return progress_x + progress_y
     
     def calculate_stability(self):
         average_speed = 0
@@ -199,16 +207,61 @@ class TowerBuildingEnv(gym.Env):
             max_speed = max(max_speed, speed)
 
         average_speed /= len(self.blocks)
-
-        return [average_speed, max_speed]
-
+        punishment = self.gamma * (average_speed + max_speed)
+        return [average_speed, max_speed, punishment]
+    
     def calculate_efficiency(self):
-        num_blocks = self.get_observation()
-        return -0.01 * num_blocks
+        return self.delta * len(self.blocks)
     
     def check_done(self):
         # Did the tower reach the goal? Did it collapse? etc...
         if self.check_win():
+            import matplotlib.pyplot as plt
+
+            records = self.records
+            x = [entry[0] for entry in records]
+            y = [entry[1] for entry in records]
+            w = [entry[2] for entry in records]
+            h = [entry[3] for entry in records]
+
+            fig, ax1 = plt.subplots(figsize=(16, 9))
+
+            # Plot y vs x
+            ax1.plot(x, y, 'b-', label='Score vs Steps')
+            ax1.set_xlabel('Steps')
+            ax1.set_ylabel('Score', color='b')
+            ax1.tick_params('y', colors='b')
+
+            # Create a second y-axis
+            ax2 = ax1.twinx()
+
+            # Plot w vs x
+            ax2.plot(x, w, 'r-', label='Width vs Steps')
+            ax2.set_ylabel('Width', color='r')
+            ax2.tick_params('y', colors='r')
+
+            # Create a third y-axis
+            ax3 = ax1.twinx()
+
+            # Offset the third y-axis
+            ax3.spines['right'].set_position(('outward', 60))
+
+            # Plot h vs x
+            ax3.plot(x, h, 'g-', label='Height vs Steps')
+            ax3.set_ylabel('Height', color='g')
+            ax3.tick_params('y', colors='g')
+
+            final_step = self.steps
+            final_score = self.current_score
+            # Add a title
+            plt.title(f'Tower Building Progress\nFinal Steps: {final_step}\nFinal Score: {final_score}')
+
+            # Adjust the plot layout
+            fig.tight_layout()
+
+            plt.savefig('score_plot.png')
+            os.system('xdg-open score_plot.png')
+
             return True
         else:
             return False
@@ -225,15 +278,18 @@ class TowerBuildingEnv(gym.Env):
     def get_screen(self):
         raw_screen = pygame.surfarray.array3d(self.screen)
 
-        resized_screen = ...
+        gray_image = Image.fromarray(raw_screen).convert('L')
+
+        resized_screen = gray_image.resize((84, 84), Image.BILINEAR)
+        # Save gray image
+        gray_image.save(f'screenshot_{self.image_index}.png')
+        #resized_screen.save(f'screenshot_resized_{self.image_index}.png')
 
         # export the raw_screen to a file
-        pygame.image.save(self.screen, f'screenshot_{self.image_index}.png')
+        #pygame.image.save(raw_screen, f'screenshot_{self.image_index}.png')
         self.image_index += 1
 
-        print("screenshot saved")
-        print("Directory:", os.getcwd())
-        return resized_screen
+        #return resized_screen
 
     def reset(self):
         self.blocks = []
@@ -255,9 +311,7 @@ class TowerBuildingEnv(gym.Env):
         self.blocks.append(new_block)
 
         self.new_block = new_block
-        self.update_width_height()
-        # Get initial observations
-        return self.get_observation()
+        self.records()
     
     def render(self):
         # Clear the screen (Example: Fill with white)
