@@ -45,7 +45,7 @@ class TowerBuildingEnv(gym.Env):
         # Coordinates calculation helper parameters
         self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # 22.3 pixels
         
-        self.max_height_coord = 0
+        self.max_h_coord = 0
         self.min_x_coord = screen_x/2
         self.max_x_coord = screen_x/2
         
@@ -63,7 +63,7 @@ class TowerBuildingEnv(gym.Env):
 
         ### Score function parameters
         # width reward = -alpha * (width - goal_width)
-        # height reward = -beta * height ^ theta
+        # height reward = beta * height ^ theta
         # stability punishment = gamma * (average_speed + max_speed)
         # efficiency punishment = delta * block_num
         self.alpha = 0.005
@@ -73,15 +73,17 @@ class TowerBuildingEnv(gym.Env):
         self.delta = -0.005
         
         # Place the first block
+        self.place_block(screen_x/2, screen_y/2)
+
+    def place_block(self, x_coord, y_coord):
         new_body = self.world.CreateDynamicBody(
-            position=(screen_x/self.ppm/2, 2/self.ppm),
-            #angle=random.choice([0, 45, 90]) * (np.pi / 180),
-            angle=random.choice([0, 90]) * (np.pi / 180),
+            position = (x_coord/self.ppm, y_coord/self.ppm),
+            angle = random.choice([0, 45, 90]) * (np.pi / 180),
         )
-        new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
+        new_block = new_body.CreatePolygonFixture(box = (self.cell_size[0]/self.ppm, self.cell_size[1]/2/self.ppm), density = 1, friction = 0.3)
         self.blocks.append(new_block)
-        self.new_block = new_block        
-        
+        self.new_block = new_block
+
     def step(self, action):
         # 4. Execute action (e.g. apply forces to Box2D bodies, etc...)
         # 5. Update Box2D world, get observations, etc...
@@ -117,29 +119,20 @@ class TowerBuildingEnv(gym.Env):
         '''
 
         if valid_placement_found:
-            new_body = self.world.CreateDynamicBody(
-                position=(block_x_coord/self.ppm, block_y_coord/self.ppm),
-                angle=random.choice([0, 45, 90]) * (np.pi / 180),
-            )
-            new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
-            self.blocks.append(new_block)
-            self.new_block = new_block
+            self.place_block(block_x_coord, block_y_coord)
         else:
             print("No valid placement found")
             pass
 
     def is_valid_placement(self, grid_x, grid_y, max_distance_squared):
         grid_x_coord, grid_y_coord = grid_x, grid_y
-        #grid_x_coord, grid_y_coord = self.grid_to_world_coords(grid_x, grid_y)
         # Create a temporary fixture representing the potential new block
-
         potential_block_body = self.world.CreateDynamicBody(
             position=(grid_x_coord/self.ppm, grid_y_coord/self.ppm)
         )
         
         # Create a temporary circular fixture attached to the potential block body
         p_f = potential_block_body.CreateCircleFixture(radius=50/self.ppm, density=1, friction=0.3)
-        # Render the potential block
 
         closest = 360000.0
         for e in self.blocks:
@@ -172,18 +165,22 @@ class TowerBuildingEnv(gym.Env):
     def grid_to_world_coords(self, grid_x, grid_y):
         return grid_x * self.cell_size[0] + self.cell_size[0] // 2, grid_y * self.cell_size[1] + self.cell_size[1] // 2
  
-    def update_score(self):
-        # ... Calculate reward based on current state and goals
-        progress = self.calculate_progress()
-        stability_punishment = self.calculate_stability()[2]
-        #win_bonus = 2 if self.check_win() else 0
-        efficiency_punishment = self.calculate_efficiency()
-        
-        self.current_score = progress + stability_punishment + efficiency_punishment
-
     def update_records(self):
+        #1 Update the step count
         self.steps += 1
 
+        #2 Update the width and height
+        self.max_h_coord = 0
+        self.min_x_coord = self.screen_x/2
+        self.max_x_coord = self.screen_x/2
+        for block in self.blocks:
+            for vertex in block.shape.vertices:
+                x_coord, y_coord = block.body.transform * vertex * self.ppm
+                self.max_h_coord = max(self.max_h_coord, y_coord)
+                self.min_x_coord = min(self.min_x_coord, x_coord)
+                self.max_x_coord = max(self.max_x_coord, x_coord)
+
+        '''
         leftest_vertex = float('inf')
         rightest_vertex = -float('inf')
         highest_vertex = -float('inf')
@@ -193,18 +190,27 @@ class TowerBuildingEnv(gym.Env):
             rightest_vertex = max(rightest_vertex, new_x_coord)
             highest_vertex = max(highest_vertex, new_y_coord)
         
-        self.max_height_coord = max(self.max_height_coord, highest_vertex)
+        self.max_h_coord = max(self.max_h_coord, highest_vertex)
         self.min_x_coord = min(self.min_x_coord, leftest_vertex)
         self.max_x_coord = max(self.max_x_coord, rightest_vertex)
+        '''
 
         self.width = (self.max_x_coord - self.min_x_coord)
-        self.height = self.max_height_coord
+        self.height = self.max_h_coord
 
+        #3 Update the score
+        progress = self.calculate_progress()
+        stability_punishment = self.calculate_stability()[2]
+        efficiency_punishment = self.calculate_efficiency()
+        self.current_score = progress + stability_punishment + efficiency_punishment
+
+        #4 Record the step, score, width, and height
         self.records.append((self.steps, self.current_score, self.width, self.height))
 
     def calculate_progress(self):
         progress_x = - self.alpha * (self.width - self.goal_width)
         progress_y = self.beta * (self.height ** self.theta)
+        print(f"Height: {self.height}, progress_y: {progress_y}\n")
         return progress_x + progress_y
     
     def calculate_stability(self):
@@ -303,7 +309,7 @@ class TowerBuildingEnv(gym.Env):
 
     def reset(self):
         # Coordinates calculation helper parameters
-        self.max_height_coord = 0
+        self.max_h_coord = 0
         self.min_x_coord = screen_x/2
         self.max_x_coord = screen_x/2
         
@@ -319,14 +325,7 @@ class TowerBuildingEnv(gym.Env):
         self.image_index = 0
 
         # Place the first block
-        new_body = self.world.CreateDynamicBody(
-            position=(screen_x/self.ppm/2, 2/self.ppm),
-            #angle=random.choice([0, 45, 90]) * (np.pi / 180),
-            angle=random.choice([0, 90]) * (np.pi / 180),
-        )
-        new_block = new_body.CreatePolygonFixture(box=(2 * self.cell_size[0]/2/self.ppm, self.cell_size[1]/2/self.ppm), density=1, friction=0.3)
-        self.blocks.append(new_block)
-        self.new_block = new_block
+        self.place_block(self.screen_x/2, self.screen_y/2)
     
     def render(self):
         # Clear the screen (Example: Fill with white)
