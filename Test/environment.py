@@ -177,7 +177,7 @@ class TowerBuildingEnv(gym.Env):
         return (self.steps, self.current_score, self.width, self.height)
 
     def calculate_progress(self):
-        progress_x = self.sigma * (self.goal_width ** self.alpha - (self.width - self.goal_width) ** self.alpha)
+        progress_x = self.sigma * (self.goal_width ** self.alpha - abs(self.width - self.goal_width) ** self.alpha)
         progress_y = self.beta * (self.height ** self.theta)
         print(f"Width: {self.width:.0f}, progress_x: {progress_x:.4f}")
         print(f"Height: {self.height:.0f}, progress_y: {progress_y:.4f}\n")
@@ -265,12 +265,13 @@ class TowerBuildingEnv(gym.Env):
         raw_screen = pygame.surfarray.array3d(self.screen)
 
         gray_image = Image.fromarray(raw_screen).convert('L')
-
+        gray_image.save(f'screenshot_{self.image_index}.png')
         resized_screen = gray_image.resize((84, 84), Image.BILINEAR)
         # Save gray image
-        gray_image.save(f'screenshot_{self.image_index}.png')
+        gray_image.save(f'screenshot_resized_{self.image_index}.png')
         #resized_screen.save(f'screenshot_resized_{self.image_index}.png')
 
+        resized_screen = np.array(resized_screen, dtype=np.uint8)/255.0
         # export the raw_screen to a file
         #pygame.image.save(raw_screen, f'screenshot_{self.image_index}.png')
         self.image_index += 1
