@@ -1,8 +1,13 @@
 import pygame
 from environment import TowerBuildingEnv
 import datetime
+from utils import ReplayBuffer
 
-env = TowerBuildingEnv(screen_x = 600, screen_y = 600, goal_width = 300, goal_height = 250, grid_size = 30, max_joints = 20)
+replay_buffer = ReplayBuffer(10000)
+
+# Create the environment
+# Screen_x, screen_y, goal_width, goal_height, grid_size, max_joints, replay_buffer
+env = TowerBuildingEnv(600, 600, 300, 250, 30, 20)
 
 while True:
     stop = False
@@ -15,7 +20,7 @@ while True:
         pygame.display.flip()
         stop = True
         
-    env.update_records()
+    step, score, width, height = env.update_records() # return the latest step, score, width, and height
     env.get_screen()
 
     done = env.check_done()
@@ -27,7 +32,6 @@ while True:
     progress = env.calculate_progress()
     stability = env.calculate_stability()[2]
     efficiency = env.calculate_efficiency()
-    score = env.current_score
     print(f"Progress: {progress:.4f}, Stability: {stability:.4f}, Efficiency: {efficiency:.4f}, Score: {score:.4f}\n")
     if done:
         print(f"win!")
