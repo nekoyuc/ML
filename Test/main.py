@@ -45,17 +45,8 @@ def update_dqn(model, optimizer, batch):
     dones = torch.tensor(dones).bool()
 
     # Current Q values
-    current_q_values = model(states)
-    print(f"Current Q values: {current_q_values}")
-    print(f"Current Q values shape: {current_q_values.shape}")
-    print(f"Current Q values type: {current_q_values.dtype}")
-    print(f"Current Q type: {type(current_q_values)}")
-
-    print(f"Actions: {actions}")
-    print(f"Actions shape: {actions.shape}")
-    print(f"Actions type: {actions.dtype}")
-    print(f"Actions type: {type(actions)}")
     actions = actions[:, 0]
+    current_q_values = model(states)
     current_q_values = current_q_values.gather(1, actions.unsqueeze(1))
 
     # Target Q values
@@ -87,6 +78,8 @@ env = TowerBuildingEnv(screen_x = SCREEN_X,
                         goal_height = GOAL_HEIGHT,
                         grid_size = GRID_SIZE,
                         max_joints = MAX_JOINTS)
+
+print(f"Action Space: {env.action_space}")
 replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
 model = TowerQNetWork(env.action_space)
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -135,7 +128,9 @@ for episode in range(NUM_EPISODES):
             break
 
         state = new_state
-        action = select_action(state, model, EPSILON)
+        action = actor(state)
+        action += noise # Exploration
+        #action = select_action(state, model, EPSILON)
         is_valid = env.step(action)
 
 fig, ax1 = plt.subplots()

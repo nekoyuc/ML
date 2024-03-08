@@ -267,8 +267,8 @@ class TowerBuildingEnv(gym.Env):
         gray_image = Image.fromarray(raw_screen).convert('L')
         gray_image.save(f'screenshot_{self.image_index}.png')
         resized_screen = gray_image.resize((84, 84), Image.BILINEAR)
-        # Save gray image
-        gray_image.save(f'screenshot_resized_{self.image_index}.png')
+        # Save resized gray image
+        resized_screen.save(f'screenshot_resized_{self.image_index}.png')
         #resized_screen.save(f'screenshot_resized_{self.image_index}.png')
 
         resized_screen = np.array(resized_screen, dtype=np.uint8)/255.0
