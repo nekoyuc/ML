@@ -163,8 +163,10 @@ class ReplayBuffer:
         self.position = 0
 
     def sample_batch(self, batch_size):
-        weights = np.array([e[2] + (float(e[5]) * 5) for e in self.experiences]) # Give weights to reward + 5 if valid
+        #weights = np.array([e[2] + (float(e[5]) * 5) for e in self.experiences]) # Give weights to reward + 5 if valid
+        weights = np.array([e[2] + (float(e[5]) * 5) + epsilon for e in self.experiences]) # Prioritize based on TD-error
         probabilities = weights / weights.sum()
+        indices = np.random.choice(len(self.experiences), batch_size, p = probabilities)
         print("Probabilities: ", probabilities)
         print("Type of probabilities: ", probabilities.dtype)
         print("Any NaN in probabilities: ", np.isnan(probabilities).any())

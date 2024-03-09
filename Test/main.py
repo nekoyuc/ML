@@ -7,7 +7,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 import random
 from environment import TowerBuildingEnv
-from utils import TowerQNetWork, ReplayBuffer
+from utils import ActorNetwork, CriticNetwork, ReplayBuffer
 import matplotlib.pyplot as plt
 import os
 
@@ -81,8 +81,10 @@ env = TowerBuildingEnv(screen_x = SCREEN_X,
 
 print(f"Action Space: {env.action_space}")
 replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
-model = TowerQNetWork(env.action_space)
-optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+actor = ActorNetwork(...)
+critic = CriticNetwork(...)
+actor_optimizer = optim.Adam(actor.parameters(), lr=LEARNING_RATE)
+critic_optimizer = optim.Adam(critic.parameters(), lr=LEARNING_RATE)
 
 loss_history = []
 score_history = []
@@ -114,11 +116,34 @@ for episode in range(NUM_EPISODES):
         done = env.check_done()
 
         replay_buffer.store(state, action, score, new_state, done, is_valid)
-        print(f"Score and Is_Valid: {score}, {is_valid}")
         if len(replay_buffer) > BATCH_SIZE:
             batch = replay_buffer.sample_batch(BATCH_SIZE)
+
+            # Calculate critic loss
+            current_q_values = critic(state, action)
+            with torch.no_grad():
+                next_actions = target_actor(new_state)
+                target_q_values = target_critic(new_state, next_actions)
+                target_q = reward + (gamma * target_q_values * (1 - done))
+
+            critic_loss = nn.MSELoss()(current_q_values, target_q)
+            critic_optimizer.zero_grad()
+            critic_loss.backward()
+            critic_optimizer.step()
+
+            # Calculate actor loss
+            actor_loss = -critic(state, actor(state)).mean()
+            actor_optimizer.zero_grad()
+            actor_loss.backward()
+            actor_optimizer.step()
+
+            # Soft update target networks
+            _update_target(target_actor, actor, tau)
+            _update_target(target_critic, critic, tau)
+            '''
             loss = update_dqn(model, optimizer, batch)
             batch_loss.append(loss)
+            '''
 
         if done:
             batch_loss.append(loss)

@@ -65,13 +65,13 @@ class TowerBuildingEnv(gym.Env):
         # Score function parameters
         ## width reward = sigma * (goal_width ^ alpha - (width - goal_width) ^ alpha), alpha > 1, sigma > 0
         ## height reward = beta * height ^ theta, thea > 1
-        ## stability punishment = gamma * (average_speed + max_speed)
+        ## stability punishment = kappa * (average_speed + max_speed)
         ## efficiency punishment = delta * block_num
         self.alpha = 1.6
         self.sigma = 0.0001
         self.beta = 0.0001
         self.theta = 2
-        self.gamma = -0.01
+        self.kappa = -0.01
         self.delta = -0.005
 
         # Place the first block
@@ -193,7 +193,7 @@ class TowerBuildingEnv(gym.Env):
             max_speed = max(max_speed, speed)
 
         average_speed /= len(self.blocks)
-        punishment = self.gamma * (average_speed + max_speed)
+        punishment = self.kappa * (average_speed + max_speed)
         return [average_speed, max_speed, punishment]
     
     def calculate_efficiency(self):
