@@ -45,7 +45,7 @@ class TowerBuildingEnv(gym.Env):
         # Coordinates calculation helper parameters
         self.is_valid = False
         self.is_valid_close = False
-        self.closest_squared = 1000000.0
+        self.closest_squared = 10000.0 # Set the closest squared to a value that yields a zero reward
         self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # 22.3 pixels
         self.max_vicinity_squared = 5000
         
@@ -65,17 +65,19 @@ class TowerBuildingEnv(gym.Env):
         #self.action_space = gym.spaces.Box(low = np.array((0,0)), high = np.array((screen_x, screen_y)), shape = (2,))
 
         # Score function parameters
-        ## width reward = sigma * (goal_width ^ alpha - (width - goal_width) ^ alpha), alpha > 1, sigma > 0
+        ## width progress = sigma * (goal_width ^ alpha - (width - goal_width) ^ alpha), alpha > 1, sigma > 0
         ## height reward = beta * height ^ theta, thea > 1
-        ## closeness reward = omega / closest_squared, omega > 0
+        ## closeness progress = -(omega * closest_squared)^zeta + phi
         ## stability punishment = kappa * (average_speed + max_speed)
         ## efficiency punishment = delta * block_num
         ## validity punishment = mu, mu < 0
         self.alpha = 1.6
         self.sigma = 0.0001
-        self.beta = 0.0001
+        self.beta = 0.0002
         self.theta = 2
-        self.omega = 500
+        self.omega = 0.00005
+        self.zeta = 1.001
+        self.phi = 1
         self.kappa = -0.01
         self.delta = -0.005
         self.mu = -10.0
@@ -89,7 +91,6 @@ class TowerBuildingEnv(gym.Env):
         else:
             angle = angle * (np.pi / 180)
         
-        print(f"Angle, radian: {angle}, Angle, degree: {angle * (180 / np.pi)}")
         new_body = self.world.CreateDynamicBody(
             position = (x_coord/self.ppm, y_coord/self.ppm),
             #angle = random.choice([0, 45, 90]) * (np.pi / 180),
@@ -137,7 +138,7 @@ class TowerBuildingEnv(gym.Env):
             block_x_coord, block_y_coord = x_coord, y_coord
             self.place_block(block_x_coord, block_y_coord, angle)
         else:
-            self.closest_squared = 1000000.0
+            self.closest_squared = 10000.0 # Set the closest squared to a value that yields a zero reward
 
 
     def is_valid_placement(self, grid_x_coord, grid_y_coord):
@@ -200,16 +201,17 @@ class TowerBuildingEnv(gym.Env):
         self.height = self.max_h_coord
 
         #3 Update the score
-        progress_reward = self.calculate_progress()
-        closeness_reward = self.calculate_closeness()
+        w_h_progress = self.calculate_progress()
+        closeness_progress = self.calculate_closeness()
         stability_punishment = self.calculate_stability()[2]
         efficiency_punishment = self.calculate_efficiency()
         if self.is_valid:
             validity_punishment = 0
         else:
-            #validity_punishment = self.mu
-            validity_punishment = 0
-        self.current_score = progress_reward + closeness_reward + stability_punishment + efficiency_punishment + validity_punishment
+            validity_punishment = self.mu
+            #validity_punishment = 0
+        print(f"Progress: {w_h_progress:.4f}, Closeness: {closeness_progress:.4f}, Stability: {stability_punishment:.4f}, Efficiency: {efficiency_punishment:.4f}, Validity: {validity_punishment:.4f}")
+        self.current_score = w_h_progress + closeness_progress + stability_punishment + efficiency_punishment + validity_punishment
 
         #4 Record the step, score, width, height, and validity
         self.records.append((self.steps, self.current_score, self.width, self.height, self.is_valid))
@@ -237,7 +239,7 @@ class TowerBuildingEnv(gym.Env):
         return self.delta * len(self.blocks)
     
     def calculate_closeness(self):
-        return self.omega / self.closest_squared
+        return - (self.omega * self.closest_squared) ** self.zeta + self.phi
     
     def check_done(self):
         # Did the tower reach the goal? Did it collapse? etc...

@@ -167,6 +167,8 @@ for episode in range(NUM_EPISODES):
 
         state = new_state
         action = actor(state).detach().numpy() # Convert to numpy array
+        action[0:2] = torch.clamp(torch.tensor(action[0:2]), min=0, max=600)
+        action[2] = torch.clamp(torch.tensor(action[2]), min=0, max=180)
         action += NOISE
         #action = select_action(state, model, EPSILON)
         env.step(action)
