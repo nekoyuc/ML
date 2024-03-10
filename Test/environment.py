@@ -37,29 +37,28 @@ class TowerBuildingEnv(gym.Env):
         self.ground = self.world.CreateStaticBody(position=(0, 0))
         self.ground.CreateEdgeFixture(vertices=[(-1500, 0), (1500, 0)], density=1, friction=0.3)
 
-        self.tower_grid = np.zeros((goal_width, goal_height))
-
         # Image index
         self.image_index = 0
 
         # Coordinates calculation helper parameters
+        self.max_h_coord = 0
+        self.min_x_coord = screen_x/2
+        self.max_x_coord = screen_x/2
+
+        # Valication helper parameters
         self.is_valid = False
         self.is_valid_close = False
         self.closest_squared = 10000.0 # Set the closest squared to a value that yields a zero reward
         self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # 22.3 pixels
         self.max_vicinity_squared = 5000
-        
-        self.max_h_coord = 0
-        self.min_x_coord = screen_x/2
-        self.max_x_coord = screen_x/2
-        
+
         # State variables
         self.width = 0
         self.height = 0
         self.blocks = []
         self.current_score = 0
         self.steps = 0
-        self.records = [] # (step, score, width, height)
+        self.records = [] # (step, score, width, height, self.is_valid)
 
         #self.action_space = gym.spaces.Box(low = -1.0, high = 1.0, shape = (2,))
         #self.action_space = gym.spaces.Box(low = np.array((0,0)), high = np.array((screen_x, screen_y)), shape = (2,))
@@ -210,7 +209,7 @@ class TowerBuildingEnv(gym.Env):
         else:
             validity_punishment = self.mu
             #validity_punishment = 0
-        print(f"Progress: {w_h_progress:.4f}, Closeness: {closeness_progress:.4f}, Stability: {stability_punishment:.4f}, Efficiency: {efficiency_punishment:.4f}, Validity: {validity_punishment:.4f}")
+        #print(f"Progress: {w_h_progress:.4f}, Closeness: {closeness_progress:.4f}, Stability: {stability_punishment:.4f}, Efficiency: {efficiency_punishment:.4f}, Validity: {validity_punishment:.4f}")
         self.current_score = w_h_progress + closeness_progress + stability_punishment + efficiency_punishment + validity_punishment
 
         #4 Record the step, score, width, height, and validity
@@ -321,21 +320,28 @@ class TowerBuildingEnv(gym.Env):
         return resized_screen
 
     def reset(self):
+        # Image index
+        self.image_index = 0
+
         # Coordinates calculation helper parameters
         self.max_h_coord = 0
         self.min_x_coord = self.screen_x/2
         self.max_x_coord = self.screen_x/2
-        
+
+        # Valication helper parameters
+        self.is_valid = False
+        self.is_valid_close = False
+        self.closest_squared = 10000.0 # Set the closest squared to a value that yields a zero reward
+        self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # 22.3 pixels
+        self.max_vicinity_squared = 5000
+
         # State variables
         self.width = 0
         self.height = 0
         self.blocks = []
-        self.steps = 0
         self.current_score = 0
-        self.records = [] # (step, score, width, height)
-
-        # Image index
-        self.image_index = 0
+        self.steps = 0
+        self.records = [] # (step, score, width, height, self.is_valid)
 
         # Place the first block
         self.place_block(self.screen_x/2, self.screen_y/2)

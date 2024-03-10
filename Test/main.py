@@ -22,8 +22,8 @@ GOAL_HEIGHT = 250
 GRID_SIZE = 30
 MAX_JOINTS = 20
 
-NUM_EPISODES = 1000
-MAX_STEPS_PER_EPISODE = 1000
+NUM_EPISODES = 200
+#MAX_STEPS_PER_EPISODE = 1000
 
 # Hyperparameters
 LEARNING_RATE = 0.001
@@ -36,47 +36,6 @@ GAMMA = 0.99 # Discount factor
 TAU = 0.01 # Soft update rate
 NOISE = 0.1 # Exploration noise
 
-'''
-# Core training logic
-def update_dqn(model, optimizer, batch):
-    states, actions, rewards, next_states, dones, _ = zip(*batch) # Ignore is_valid_close for now
-    
-    states = np.stack(states, axis=0)
-    states = torch.tensor(states).float()
-    actions = torch.tensor(actions).long() # Assuming action is discrete for now
-    rewards = torch.tensor(rewards).float()
-    next_states = np.stack(next_states, axis=0)
-    next_states = torch.tensor(next_states).float()
-    dones = torch.tensor(dones).bool()
-
-    # Current Q values
-    actions = actions[:, 0]
-    current_q_values = model(states)
-    current_q_values = current_q_values.gather(1, actions.unsqueeze(1))
-
-    # Target Q values
-    with torch.no_grad():
-        max_next_q_values = model(next_states).max(1)[0]
-    target_q_values = rewards + (DISCOUNT_FACTOR * max_next_q_values * (1 - dones))
-
-    # Loss
-    loss = nn.functional.mse_loss(current_q_values, target_q_values)
-
-    # Optimization step
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-
-def select_action(state, model, epsilon):
-    if random.random() < epsilon:
-        action = env.action_space.sample()
-    else:
-        with torch.no_grad():
-            action_values = model(state)
-            action = action_values.argmax().item()
-    return action
-'''
-
 # Initialize environment, replay buffer, and model
 env = TowerBuildingEnv(screen_x = SCREEN_X,
                         screen_y = SCREEN_Y,
@@ -88,9 +47,10 @@ env = TowerBuildingEnv(screen_x = SCREEN_X,
 replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
 
 state_size = env.get_screen().shape
+print(f"State size: {state_size}")
 action_size = 3 # x, y, and rotation
-hidden_layers_actor = [256, 128]
-hidden_layers_critic = [256, 128]
+hidden_layers_actor = [400, 128]
+hidden_layers_critic = [400, 128]
 actor = ActorNetwork(state_size, action_size, hidden_layers_actor)
 critic = CriticNetwork(state_size, action_size, hidden_layers_critic)
 target_actor = copy.deepcopy(actor)
@@ -108,9 +68,8 @@ for episode in range(NUM_EPISODES):
     is_valid = env.is_valid
     state = env.get_screen()
     state = torch.tensor(np.array(state)).unsqueeze(0).float()
-    action = env.action_space.sample()
+    action = (random.randint(0, 600), random.randint(0, 600), random.uniform(0, 180))
     done = False
-    batch_loss = []
 
     while True: # Every loop places a new block
         stop = False
@@ -127,6 +86,7 @@ for episode in range(NUM_EPISODES):
         new_state = env.get_screen()
         new_state = torch.tensor(np.array(new_state)).unsqueeze(0).float()
         done = env.check_done()
+        print(f"Episode: {episode}, Score: {score}, Done: {done}")
 
         replay_buffer.store(state, action, score, new_state, done, is_valid)
         if len(replay_buffer) > BATCH_SIZE:
@@ -153,25 +113,24 @@ for episode in range(NUM_EPISODES):
             # Soft update target networks
             _update_target(target_actor, actor, TAU)
             _update_target(target_critic, critic, TAU)
-            '''
-            loss = update_dqn(model, optimizer, batch)
-            batch_loss.append(loss)
-            '''
+
+            loss_history.append(critic_loss.item()) # Store critic loss
 
         if done:
-            batch_loss.append(loss)
             score_history.append(score)
-            ave_loss = sum(batch_loss) / len(batch_loss)
-            loss_history.append(ave_loss)
             break
 
         state = new_state
-        action = actor(state).detach().numpy() # Convert to numpy array
-        action[0:2] = torch.clamp(torch.tensor(action[0:2]), min=0, max=600)
-        action[2] = torch.clamp(torch.tensor(action[2]), min=0, max=180)
-        action += NOISE
+        if random.random() > EPSILON:
+            action = actor(state).detach().numpy() # Convert to numpy array
+            action[0:2] = torch.clamp(torch.tensor(action[0:2]), min=0, max=600)
+            action[2] = torch.clamp(torch.tensor(action[2]), min=0, max=180)
+            action += NOISE
         #action = select_action(state, model, EPSILON)
+        else:
+            action = (random.randint(0, 600), random.randint(0, 600), random.uniform(0, 180))
         env.step(action)
+        EPSILON *= EPSILON_DECAY
 
 fig, ax1 = plt.subplots()
 
