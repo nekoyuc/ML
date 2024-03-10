@@ -44,8 +44,10 @@ class TowerBuildingEnv(gym.Env):
 
         # Coordinates calculation helper parameters
         self.is_valid = False
+        self.is_valid_close = False
+        self.closest_squared = 1000000.0
         self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # 22.3 pixels
-        self.max_vicinity = 5000
+        self.max_vicinity_squared = 5000
         
         self.max_h_coord = 0
         self.min_x_coord = screen_x/2
@@ -60,27 +62,38 @@ class TowerBuildingEnv(gym.Env):
         self.records = [] # (step, score, width, height)
 
         #self.action_space = gym.spaces.Box(low = -1.0, high = 1.0, shape = (2,))
-        self.action_space = gym.spaces.Box(low = np.array((0,0)), high = np.array((screen_x, screen_y)), shape = (2,))
+        #self.action_space = gym.spaces.Box(low = np.array((0,0)), high = np.array((screen_x, screen_y)), shape = (2,))
 
         # Score function parameters
         ## width reward = sigma * (goal_width ^ alpha - (width - goal_width) ^ alpha), alpha > 1, sigma > 0
         ## height reward = beta * height ^ theta, thea > 1
+        ## closeness reward = omega / closest_squared, omega > 0
         ## stability punishment = kappa * (average_speed + max_speed)
         ## efficiency punishment = delta * block_num
+        ## validity punishment = mu, mu < 0
         self.alpha = 1.6
         self.sigma = 0.0001
         self.beta = 0.0001
         self.theta = 2
+        self.omega = 500
         self.kappa = -0.01
         self.delta = -0.005
+        self.mu = -10.0
 
         # Place the first block
         self.place_block(screen_x/2, screen_y/2)
 
-    def place_block(self, x_coord, y_coord):
+    def place_block(self, x_coord, y_coord, angle = None):
+        if angle is None:
+            angle = random.uniform(0, 180) * (np.pi / 180)
+        else:
+            angle = angle * (np.pi / 180)
+        
+        print(f"Angle, radian: {angle}, Angle, degree: {angle * (180 / np.pi)}")
         new_body = self.world.CreateDynamicBody(
             position = (x_coord/self.ppm, y_coord/self.ppm),
-            angle = random.choice([0, 45, 90]) * (np.pi / 180),
+            #angle = random.choice([0, 45, 90]) * (np.pi / 180),
+            angle = angle,
         )
         new_block = new_body.CreatePolygonFixture(box = (self.cell_size[0]/self.ppm, self.cell_size[1]/2/self.ppm), density = 1, friction = 0.3)
         self.blocks.append(new_block)
@@ -89,27 +102,45 @@ class TowerBuildingEnv(gym.Env):
     def step(self, action): # Return true if a valid and close placement is found
         # Randomly choose a valid and close point
         self.is_valid = False
-        valid_close_placement = False
+        self.is_valid_close = False
 
-        for i in range(1000):
+        x_coord, y_coord, angle = action[0], action[1], action[2]
+
+        ### Attempt to find a valid and close placement within 1 single loop
+        '''
+        while True:
             x_coord = self.screen_x * random.random()
             y_coord = self.screen_y * random.random()
-            i = i + 1
-            self.is_valid, closest = self.is_valid_placement(x_coord, y_coord)
-            if self.is_valid and self.is_close_enough(closest, self.max_vicinity):
+            self.is_valid, closest_squared = self.is_valid_placement(x_coord, y_coord)
+            if self.is_valid and self.is_close_enough(closest_squared, self.max_vicinity_squared):
                 block_x_coord, block_y_coord = x_coord, y_coord
-                valid_close_placement = True
+                self.is_valid_close = True
                 break
-        
-        # Place a block at the chosen point
-        if valid_close_placement:
-            self.place_block(block_x_coord, block_y_coord)
-            return valid_close_placement
-        else:
-            print("No valid placement found")
-            return valid_close_placement
+        '''
 
-    def is_valid_placement(self, grid_x_coord, grid_y_coord, max_distance_squared=5000.0):
+        ### Attempt 1 placement per loop, if valid and close placement is found place a block
+        '''
+        self.is_valid, self.closest_squared = self.is_valid_placement(x_coord, y_coord)
+        if self.is_valid and self.is_close_enough(self.closest_squared, self.max_vicinity_squared):
+            block_x_coord, block_y_coord = x_coord, y_coord
+            self.is_valid_close = True
+
+        if self.is_valid_close:
+            self.place_block(block_x_coord, block_y_coord, angle)
+        else:
+            self.closest_squared = 1000000.0
+        '''
+
+        ### Attempt 1 placement per loop, if valid placement is found place a block
+        self.is_valid, self.closest_squared = self.is_valid_placement(x_coord, y_coord)
+        if self.is_valid:
+            block_x_coord, block_y_coord = x_coord, y_coord
+            self.place_block(block_x_coord, block_y_coord, angle)
+        else:
+            self.closest_squared = 1000000.0
+
+
+    def is_valid_placement(self, grid_x_coord, grid_y_coord):
         # Create a temporary fixture representing the potential new block
         potential_block_body = self.world.CreateDynamicBody(
             position=(grid_x_coord/self.ppm, grid_y_coord/self.ppm)
@@ -118,21 +149,23 @@ class TowerBuildingEnv(gym.Env):
         # Create a temporary circular fixture attached to the potential block body
         p_f = potential_block_body.CreateCircleFixture(radius=50/self.ppm, density=1, friction=0.3)
 
-        closest = 360000.0
+        closest_squared = 360000.0
         for e in self.blocks:
             if self.fixtures_overlap(p_f, e):
                 self.world.DestroyBody(potential_block_body)
-                return False, closest
+                return False, None
             else:
-                block_x_coord, block_y_coord = self.grid_to_world_coords(e.body.position.x, e.body.position.y)
-                distance_squared = (block_x_coord - grid_x_coord) ** 2 + (block_y_coord - grid_y_coord) ** 2
-                closest =  min(distance_squared, closest)
+                block_x_coord = e.body.position.x * self.ppm
+                block_y_coord = e.body.position.y * self.ppm
+                #block_x_coord, block_y_coord = self.grid_to_world_coords(e.body.position.x, e.body.position.y)
+                dist_squared = (block_x_coord - grid_x_coord) ** 2 + (block_y_coord - grid_y_coord) ** 2
+                closest_squared =  min(dist_squared, closest_squared)
         
         self.world.DestroyBody(potential_block_body)
-        return True, closest
+        return True, closest_squared
 
-    def is_close_enough(self, distance, max_distance):
-        return distance < max_distance
+    def is_close_enough(self, dist_squared, max_dist_squared):
+        return dist_squared < max_dist_squared
 
     def fixtures_overlap(self, fixture1, fixture2):
         # ... Check if fixture1 and fixture2 overlap ...
@@ -167,20 +200,24 @@ class TowerBuildingEnv(gym.Env):
         self.height = self.max_h_coord
 
         #3 Update the score
-        progress = self.calculate_progress()
+        progress_reward = self.calculate_progress()
+        closeness_reward = self.calculate_closeness()
         stability_punishment = self.calculate_stability()[2]
         efficiency_punishment = self.calculate_efficiency()
-        self.current_score = progress + stability_punishment + efficiency_punishment
+        if self.is_valid:
+            validity_punishment = 0
+        else:
+            #validity_punishment = self.mu
+            validity_punishment = 0
+        self.current_score = progress_reward + closeness_reward + stability_punishment + efficiency_punishment + validity_punishment
 
-        #4 Record the step, score, width, and height
-        self.records.append((self.steps, self.current_score, self.width, self.height))
-        return (self.steps, self.current_score, self.width, self.height)
+        #4 Record the step, score, width, height, and validity
+        self.records.append((self.steps, self.current_score, self.width, self.height, self.is_valid))
+        return (self.steps, self.current_score, self.width, self.height, self.is_valid)
 
     def calculate_progress(self):
         progress_x = self.sigma * (self.goal_width ** self.alpha - abs(self.width - self.goal_width) ** self.alpha)
         progress_y = self.beta * (self.height ** self.theta)
-        print(f"Width: {self.width:.0f}, progress_x: {progress_x:.4f}")
-        print(f"Height: {self.height:.0f}, progress_y: {progress_y:.4f}\n")
         return progress_x + progress_y
     
     def calculate_stability(self):
@@ -198,6 +235,9 @@ class TowerBuildingEnv(gym.Env):
     
     def calculate_efficiency(self):
         return self.delta * len(self.blocks)
+    
+    def calculate_closeness(self):
+        return self.omega / self.closest_squared
     
     def check_done(self):
         # Did the tower reach the goal? Did it collapse? etc...
@@ -280,7 +320,6 @@ class TowerBuildingEnv(gym.Env):
 
     def reset(self):
         # Coordinates calculation helper parameters
-        self.is_valid = False
         self.max_h_coord = 0
         self.min_x_coord = self.screen_x/2
         self.max_x_coord = self.screen_x/2
@@ -309,8 +348,12 @@ class TowerBuildingEnv(gym.Env):
 
         # Draw blocks 
         for i, block in enumerate(self.blocks):
-            self.draw_block(block.body, self.block_colors[i % len(self.block_colors)])
-
+            # draw colorful blocks
+            #self.draw_block(block.body, self.block_colors[i % len(self.block_colors)])
+            # draw grey blocks
+            self.draw_block(block.body, (50, 50, 50))
+            # draw block outlines            
+            
     def draw_block(self, body, color):
         for fixture in body.fixtures:
             shape = fixture.shape

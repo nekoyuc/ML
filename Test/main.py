@@ -7,9 +7,10 @@ import numpy as np
 from torch.utils.data import DataLoader
 import random
 from environment import TowerBuildingEnv
-from utils import ActorNetwork, CriticNetwork, ReplayBuffer
+from utils import ActorNetwork, CriticNetwork, ReplayBuffer, _update_target
 import matplotlib.pyplot as plt
 import os
+import copy
 
 # ... Other RL algorithm imports ...
 
@@ -31,7 +32,11 @@ REPLAY_BUFFER_CAPACITY = 10000
 EPSILON = 1.0 # Initial exploration rate
 EPSILON_DECAY = 0.995 # How quickly exploration decreases
 BATCH_SIZE = 100
+GAMMA = 0.99 # Discount factor
+TAU = 0.01 # Soft update rate
+NOISE = 0.1 # Exploration noise
 
+'''
 # Core training logic
 def update_dqn(model, optimizer, batch):
     states, actions, rewards, next_states, dones, _ = zip(*batch) # Ignore is_valid_close for now
@@ -70,6 +75,7 @@ def select_action(state, model, epsilon):
             action_values = model(state)
             action = action_values.argmax().item()
     return action
+'''
 
 # Initialize environment, replay buffer, and model
 env = TowerBuildingEnv(screen_x = SCREEN_X,
@@ -79,10 +85,17 @@ env = TowerBuildingEnv(screen_x = SCREEN_X,
                         grid_size = GRID_SIZE,
                         max_joints = MAX_JOINTS)
 
-print(f"Action Space: {env.action_space}")
 replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
-actor = ActorNetwork(...)
-critic = CriticNetwork(...)
+
+state_size = env.get_screen().shape
+action_size = 3 # x, y, and rotation
+hidden_layers_actor = [256, 128]
+hidden_layers_critic = [256, 128]
+actor = ActorNetwork(state_size, action_size, hidden_layers_actor)
+critic = CriticNetwork(state_size, action_size, hidden_layers_critic)
+target_actor = copy.deepcopy(actor)
+target_critic = copy.deepcopy(critic)
+
 actor_optimizer = optim.Adam(actor.parameters(), lr=LEARNING_RATE)
 critic_optimizer = optim.Adam(critic.parameters(), lr=LEARNING_RATE)
 
@@ -122,9 +135,9 @@ for episode in range(NUM_EPISODES):
             # Calculate critic loss
             current_q_values = critic(state, action)
             with torch.no_grad():
-                next_actions = target_actor(new_state)
-                target_q_values = target_critic(new_state, next_actions)
-                target_q = reward + (gamma * target_q_values * (1 - done))
+                new_action = target_actor(new_state)
+                target_q_values = target_critic(new_state, new_action)
+                target_q = score + (GAMMA * target_q_values * (1 - done))
 
             critic_loss = nn.MSELoss()(current_q_values, target_q)
             critic_optimizer.zero_grad()
@@ -138,8 +151,8 @@ for episode in range(NUM_EPISODES):
             actor_optimizer.step()
 
             # Soft update target networks
-            _update_target(target_actor, actor, tau)
-            _update_target(target_critic, critic, tau)
+            _update_target(target_actor, actor, TAU)
+            _update_target(target_critic, critic, TAU)
             '''
             loss = update_dqn(model, optimizer, batch)
             batch_loss.append(loss)
@@ -153,10 +166,10 @@ for episode in range(NUM_EPISODES):
             break
 
         state = new_state
-        action = actor(state)
-        action += noise # Exploration
+        action = actor(state).detach().numpy() # Convert to numpy array
+        action += NOISE
         #action = select_action(state, model, EPSILON)
-        is_valid = env.step(action)
+        env.step(action)
 
 fig, ax1 = plt.subplots()
 

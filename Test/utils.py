@@ -183,3 +183,16 @@ class ReplayBuffer:
 
     def __len__(self):
         return len(self.experiences)
+
+def _update_target(target_network, main_network, tau):
+    '''
+    Performs a soft update of the target network parameters using the main network parameters
+
+    Args:
+        target_network (nn.Module): The target network to update
+        main_network (nn.Module): The main network from which to draw the updated parameters
+        tau (float): The interpolation parameter for the update, the rate of parameter blending.
+            A value of 1.0 means hard update. Usually a value between 0.01 and 0.001 is used.
+    '''
+    for target_param, main_param in zip(target_network.parameters(), main_network.parameters()):
+        target_param.data.copy_(tau * main_param.data + (1.0 - tau) * target_param.data)
