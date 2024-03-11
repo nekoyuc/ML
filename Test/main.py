@@ -22,7 +22,7 @@ GOAL_HEIGHT = 250
 GRID_SIZE = 30
 MAX_JOINTS = 20
 
-NUM_EPISODES = 200
+NUM_EPISODES = 500
 #MAX_STEPS_PER_EPISODE = 1000
 
 # Hyperparameters
@@ -30,7 +30,7 @@ LEARNING_RATE = 0.001
 DISCOUNT_FACTOR = 0.95
 REPLAY_BUFFER_CAPACITY = 10000
 EPSILON = 1.0 # Initial exploration rate
-EPSILON_DECAY = 0.9999 # How quickly exploration decreases
+EPSILON_DECAY = 0.996 # How quickly exploration decreases
 BATCH_SIZE = 100
 GAMMA = 0.99 # Discount factor
 TAU = 0.01 # Soft update rate
@@ -104,7 +104,6 @@ for episode in range(NUM_EPISODES):
             current_q_values = critic(state, action)
             with torch.no_grad():
                 new_action = target_actor(new_state)[0]
-                new_action[0:2] = torch.clamp(torch.tensor(action[0:2]), min=0, max=600)
                 new_action[2] = torch.clamp(torch.tensor(action[2]), min=0, max=180)
                 target_q_values = target_critic(new_state, new_action)
                 target_q = score + (GAMMA * target_q_values * (1 - done))
@@ -132,35 +131,37 @@ for episode in range(NUM_EPISODES):
 
         state = new_state
         if random.random() > EPSILON:
-            action = actor(state)[0].detach().numpy() # Convert to numpy array
-            action[0:2] = torch.clamp(torch.tensor(action[0:2]), min=0, max=600)
+            action = actor(state)[0]
+            action = action.detach().numpy() # Convert to numpy array
+            action_string = f"Unclamped Exploitation Action: {action}\n"
             action[2] = torch.clamp(torch.tensor(action[2]), min=0, max=180)
             action += NOISE
-            action_string = f"Exploitation Action: {action}\n"
+            action_string = action_string + f"Exploitation Action: {action}\n"
             action_history[action_index] = action_string
             step_history[step_index] = action_string
             #print(f"Exploitation Action: , {action}")
         #action = select_action(state, model, EPSILON)
         else:
             action = (random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 180))
-            action_string = f"Exploration Action: {action}\n"
+            action_string = f"No Action Clamping\nExploration Action: {action}\n"
             action_history[action_index] = action_string
             step_history[step_index] = action_string
             #print(f"Exploration Action: , {action}")
         action_index += 1
         env.step(action)
-        EPSILON *= EPSILON_DECAY
+        
         #score_history_string = f"Score History: , {score_history}\n"
         #print(f"Score History: , {score_history}\n")
         print(episode_string+record_string+action_string)
 
-    # Save action history to a text file
+    EPSILON *= EPSILON_DECAY
+    # Save action history of last episode to a text file
     with open(f'/home/yucblob/src/ML/action_history_episode_{env.episode}.txt', 'w') as file:
         for index, action_string in action_history.items():
             file.write(f"Action {index}: {action_string}\n")
     env.episode += 1
 
-# Save step history to a text file
+# Save step history of all episodes to a text file
 with open(f'/home/yucblob/src/ML/step_history.txt', 'w') as file:
     for index, action_string in step_history.items():
         file.write(f"Step {index}: {action_string}\n")

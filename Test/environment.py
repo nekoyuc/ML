@@ -68,10 +68,10 @@ class TowerBuildingEnv(gym.Env):
         ### Score function parameters
         ## width progress = sigma * (goal_width ^ alpha - (width - goal_width) ^ alpha), alpha > 1, sigma > 0
         self.alpha = 1.6
-        self.sigma = 0.0001
+        self.sigma = 0.0005
         ## height reward = beta * height ^ theta, thea > 1
-        self.beta = 0.0002
-        self.theta = 2
+        self.beta = 0.0005
+        self.theta = 2.13
         ## closeness progress = -(omega * closest_squared)^zeta + phi
         self.omega = 0.0001
         self.zeta = 1.001
@@ -79,7 +79,7 @@ class TowerBuildingEnv(gym.Env):
         ## stability punishment = kappa * (average_speed + max_speed)
         self.kappa = -0.01
         ## efficiency punishment = delta * block_num
-        self.delta = -0.1
+        self.delta = -0.08
         ## validity punishment = mu, mu < 0
         self.mu = -5.0
 
@@ -135,7 +135,6 @@ class TowerBuildingEnv(gym.Env):
         ### Attempt 1 placement per loop, if valid placement is found place a block
         self.is_valid, self.closest_squared = self.is_valid_placement(x_coord, y_coord)
         if self.is_valid:
-            print("Valid placement found")
             block_x_norm, block_y_norm = action[0], action[1]
             self.place_block(block_x_norm, block_y_norm, angle)
         else:
@@ -202,7 +201,8 @@ class TowerBuildingEnv(gym.Env):
         self.height = self.max_h_coord
 
         #3 Update the score
-        w_h_progress = self.calculate_progress()
+        w_progress = self.calculate_w_progress()
+        h_reward = self.calculate_h_reward()
         closeness_progress = self.calculate_closeness()
         stability_punishment = self.calculate_stability()[2]
         efficiency_punishment = self.calculate_efficiency()
@@ -212,16 +212,25 @@ class TowerBuildingEnv(gym.Env):
             validity_punishment = self.mu
             #validity_punishment = 0
         #print(f"Progress: {w_h_progress:.4f}, Closeness: {closeness_progress:.4f}, Stability: {stability_punishment:.4f}, Efficiency: {efficiency_punishment:.4f}, Validity: {validity_punishment:.4f}")
-        self.current_score = w_h_progress + closeness_progress + stability_punishment + efficiency_punishment + validity_punishment + 40
+        self.current_score = w_progress + h_reward + closeness_progress + stability_punishment + efficiency_punishment + validity_punishment + 40
+        #self.current_score = self.current_score / 100 # Scale the score to a range between 0 and 1
         self.highest_score = max(self.highest_score, self.current_score)
         #4 Record the step, score, width, height, and validity
-        self.records.append((self.steps, self.current_score, self.width, self.height, self.is_valid))
+        self.records.append((self.steps,
+                             self.current_score,
+                             self.width,
+                             self.height,
+                             self.is_valid,
+                             w_progress,
+                             h_reward,
+                             closeness_progress))
         return (self.steps, self.current_score, self.width, self.height, self.is_valid)
 
-    def calculate_progress(self):
-        progress_x = self.sigma * (self.goal_width ** self.alpha - abs(self.width - self.goal_width) ** self.alpha)
-        progress_y = self.beta * (self.height ** self.theta)
-        return progress_x + progress_y
+    def calculate_w_progress(self):
+        return self.sigma * (self.goal_width ** self.alpha - abs(self.width - self.goal_width) ** self.alpha)
+    
+    def calculate_h_reward(self):
+        return self.beta * (self.height ** self.theta)
     
     def calculate_stability(self):
         average_speed = 0
@@ -252,17 +261,22 @@ class TowerBuildingEnv(gym.Env):
 
             records = self.records
             x = [entry[0] for entry in records]
-            y = [entry[1] for entry in records]
+            score = [entry[1] for entry in records]
             w = [entry[2] for entry in records]
             h = [entry[3] for entry in records]
+            w_progress = [entry[5] for entry in records]
+            h_reward = [entry[6] for entry in records]
+            closeness_progress = [entry[7] for entry in records]
 
             fig, ax1 = plt.subplots(figsize=(16, 9))
 
-            # Plot y vs x
-            ax1.plot(x, y, 'b-', label='Score vs Steps')
+            # Plot score vs x
+            ax1.plot(x, score, 'b-', label='Score vs Steps')
             ax1.set_xlabel('Steps')
             ax1.set_ylabel('Score', color='b')
             ax1.tick_params('y', colors='b')
+            ax1.set_xlim(0, 250)
+            ax1.set_ylim(-30, 100)
 
             # Create a second y-axis
             ax2 = ax1.twinx()
@@ -271,17 +285,60 @@ class TowerBuildingEnv(gym.Env):
             ax2.plot(x, w, 'r-', label='Width vs Steps')
             ax2.set_ylabel('Width', color='r')
             ax2.tick_params('y', colors='r')
+            ax1.set_xlim(0, 250)
+            ax2.set_ylim(0, 1400)
 
             # Create a third y-axis
             ax3 = ax1.twinx()
 
             # Offset the third y-axis
-            ax3.spines['right'].set_position(('outward', 60))
+            ax3.spines['right'].set_position(('outward', 40))
 
             # Plot h vs x
             ax3.plot(x, h, 'g-', label='Height vs Steps')
             ax3.set_ylabel('Height', color='g')
             ax3.tick_params('y', colors='g')
+            ax1.set_xlim(0, 250)
+            ax3.set_ylim(0, 270)
+
+            # Create a forth y-axis
+            ax4 = ax1.twinx()
+
+            # Offset the forth y-axis
+            ax4.spines['right'].set_position(('outward', 80))
+
+            # Plot w_progress vs x
+            ax4.plot(x, w_progress, 'c-', label='Width Progress vs Steps')
+            ax4.set_ylabel('Width Progress', color='c')
+            ax4.tick_params('y', colors='c')
+            ax1.set_xlim(0, 250)
+            ax4.set_ylim(-30, 100)
+
+            # Create a fifth y-axis
+            ax5 = ax1.twinx()
+
+            # Offset the fifth y-axis
+            ax5.spines['right'].set_position(('outward', 120))
+
+            # Plot h_reward vs x
+            ax5.plot(x, h_reward, 'm-', label='Height Reward vs Steps')
+            ax5.set_ylabel('Height Reward', color='m')
+            ax5.tick_params('y', colors='m')
+            ax1.set_xlim(0, 250)
+            ax5.set_ylim(-30, 100)
+
+            # Create a sixth y-axis
+            ax6 = ax1.twinx()
+
+            # Offset the sixth y-axis
+            ax6.spines['right'].set_position(('outward', 160))
+
+            # Plot closeness_progress vs x
+            ax6.plot(x, closeness_progress, 'y-', label='Closeness Progress vs Steps')
+            ax6.set_ylabel('Closeness Progress', color='y')
+            ax6.tick_params('y', colors='y')
+            ax1.set_xlim(0, 250)
+            ax6.set_ylim(-30, 100)
 
             final_step = self.steps
             final_score = self.current_score
@@ -292,7 +349,7 @@ class TowerBuildingEnv(gym.Env):
             fig.tight_layout()
 
             plt.savefig(f'score_plot_episode_{self.episode}.png')
-            os.system('xdg-open score_plot.png')
+            #os.system('xdg-open score_plot.png')
             
             return True
         else:

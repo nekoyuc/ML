@@ -17,6 +17,7 @@ class ActorNetwork(nn.Module):
             nn.ReLU(),
             nn.Conv2d(in_channels = 4, out_channels = 8, kernel_size = 3, stride = 2),
             nn.ReLU(),
+            nn.Conv2d(in_channels = 8, out_channels = 1, kernel_size = 3, stride = 2),
             nn.Flatten() # Flatten the output for the fully connected layers below
         ) # input size (1, 256, 256), output size (8, 63, 63)
 
@@ -41,7 +42,8 @@ class ActorNetwork(nn.Module):
     def forward(self, state):
         x = self.conv_layers(state)
         x = self.fc_layers(x)
-        return x
+        output = torch.sigmoid(x) # Sigmoid activation for the output
+        return output
 
 class CriticNetwork(nn.Module):
     def __init__(self, state_size, action_size, hidden_layers):
