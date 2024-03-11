@@ -13,14 +13,14 @@ class ActorNetwork(nn.Module):
 
         # Adjust the 'in_channels' parameter if RGB images are used
         self.conv_layers = nn.Sequential(
-            nn.Conv2d(in_channels = 1, out_channels = 16, kernel_size = 3, stride = 2),
+            nn.Conv2d(in_channels = 1, out_channels = 4, kernel_size = 4, stride = 2),
             nn.ReLU(),
-            nn.Conv2d(in_channels = 16, out_channels = 32, kernel_size = 3, stride = 2),
+            nn.Conv2d(in_channels = 4, out_channels = 8, kernel_size = 3, stride = 2),
             nn.ReLU(),
             nn.Flatten() # Flatten the output for the fully connected layers below
-        )
+        ) # input size (1, 256, 256), output size (8, 63, 63)
 
-        # Calculate size afte convolutions
+        # Calculate size afte convolutions, only used when initializing the fully connected layers
         conv_out_size = self._get_conv_out(state_size)
 
         # Fully connected Layers
@@ -33,14 +33,15 @@ class ActorNetwork(nn.Module):
 
     def _get_conv_out(self, state_size):
         # Calculate output size of the convolutional layers
-        dummy_input = torch.zeros(1, 1, *state_size) # batch size 1, 1 chanel, state_size
+        dummy_input = torch.zeros(1, *state_size) # batch size 1, state_size (1, 256, 256)
         output = self.conv_layers(dummy_input) # Pass through convolutional layers
-        return output.size()[1:].numel() # Calculate flattened size
+        conv_out_size = output.size()[1:].numel() # Calculate the output size
+        return conv_out_size
 
     def forward(self, state):
         x = self.conv_layers(state)
-        print("x shape", x.shape)
         x = self.fc_layers(x)
+        return x
 
 class CriticNetwork(nn.Module):
     def __init__(self, state_size, action_size, hidden_layers):
@@ -48,10 +49,13 @@ class CriticNetwork(nn.Module):
 
         # Convolutional Layers for State Processing
         self.conv_state = nn.Sequential(
-            nn.Conv2d(in_channels = 1, out_channels = 16, kernel_size = 3, stride = 2),
+            nn.Conv2d(in_channels = 1, out_channels = 4, kernel_size = 4, stride = 2),
             nn.ReLU(),
+            nn.Conv2d(in_channels = 4, out_channels = 1, kernel_size = 3, stride = 1),
+            nn.ReLU(),
+            nn.Flatten() # Flatten the output for the fully connected layers below
             # ... mroe convolutional layers if desired ...
-        )
+        ) # input size (1, 256, 256), output size (1, 125, 125)
 
         # Process action (adjust based on integration)
         self.action_layers = nn.Sequential(
@@ -61,7 +65,9 @@ class CriticNetwork(nn.Module):
         )
 
         # Combine state and action representations (calculate sizes accordingly)
+        # Only used when initializing the fully connected layers
         combined_size = self._get_combined_size(state_size, action_size)
+
         self.fc_layers = nn.Sequential(
             nn.Linear(combined_size, hidden_layers[1]),
             nn.ReLU(),
@@ -70,8 +76,8 @@ class CriticNetwork(nn.Module):
         )
 
     def _get_combined_size(self,state_size, action_size):
-        dummy_state = torch.zeros(1, 1, *state_size)
-        dummy_action = torch.zeros(1, action_size)
+        dummy_state = torch.zeros(1, *state_size) # batch size 1, state_size (1, 256, 256)
+        dummy_action = torch.zeros(1, action_size) # batch size 1, action_size
 
         x_state = self.conv_state(dummy_state)
         x_action = self.action_layers(dummy_action)
@@ -82,12 +88,8 @@ class CriticNetwork(nn.Module):
         # ... implementation similar to _get_conv_out() ...
 
     def forward(self, state, action):
-        # Forward pass logic (using ReLU activation for hidden layers)
-        # ... implementation similar to ActorNetwork.forward() ...
-        # ... but with the combined state and action representations ...
-
         x_state = self.conv_state(state)
-        x_action = self.action_layers(action)
+        x_action = self.action_layers(torch.Tensor(action).unsqueeze(0))
 
         x = torch.cat([x_state.flatten(start_dim = 1), x_action], dim = 1) # Concatenation
         x = self.fc_layers(x)
@@ -104,9 +106,6 @@ class ReplayBuffer:
         weights = np.array([e[2] + (float(e[5]) * 5) for e in self.experiences]) # Prioritize based on TD-error
         probabilities = weights / weights.sum()
         indices = np.random.choice(len(self.experiences), batch_size, p = probabilities)
-        print("Probabilities: ", probabilities)
-        print("Type of probabilities: ", probabilities.dtype)
-        print("Any NaN in probabilities: ", np.isnan(probabilities).any())
         indices = np.random.choice(len(self.experiences), batch_size, p=probabilities)
         batch = [self.experiences[index] for index in indices]
         return batch

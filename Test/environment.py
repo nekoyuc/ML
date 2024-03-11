@@ -38,6 +38,7 @@ class TowerBuildingEnv(gym.Env):
         self.ground.CreateEdgeFixture(vertices=[(-1500, 0), (1500, 0)], density=1, friction=0.3)
 
         # Image index
+        self.episode = 0
         self.image_index = 0
 
         # Coordinates calculation helper parameters
@@ -57,32 +58,33 @@ class TowerBuildingEnv(gym.Env):
         self.height = 0
         self.blocks = []
         self.current_score = 0
+        self.highest_score = 0
         self.steps = 0
         self.records = [] # (step, score, width, height, self.is_valid)
 
         #self.action_space = gym.spaces.Box(low = -1.0, high = 1.0, shape = (2,))
         #self.action_space = gym.spaces.Box(low = np.array((0,0)), high = np.array((screen_x, screen_y)), shape = (2,))
 
-        # Score function parameters
+        ### Score function parameters
         ## width progress = sigma * (goal_width ^ alpha - (width - goal_width) ^ alpha), alpha > 1, sigma > 0
-        ## height reward = beta * height ^ theta, thea > 1
-        ## closeness progress = -(omega * closest_squared)^zeta + phi
-        ## stability punishment = kappa * (average_speed + max_speed)
-        ## efficiency punishment = delta * block_num
-        ## validity punishment = mu, mu < 0
         self.alpha = 1.6
         self.sigma = 0.0001
+        ## height reward = beta * height ^ theta, thea > 1
         self.beta = 0.0002
         self.theta = 2
-        self.omega = 0.00005
+        ## closeness progress = -(omega * closest_squared)^zeta + phi
+        self.omega = 0.0001
         self.zeta = 1.001
-        self.phi = 1
+        self.phi = 7
+        ## stability punishment = kappa * (average_speed + max_speed)
         self.kappa = -0.01
-        self.delta = -0.005
-        self.mu = -10.0
+        ## efficiency punishment = delta * block_num
+        self.delta = -0.05
+        ## validity punishment = mu, mu < 0
+        self.mu = -5.0
 
         # Place the first block
-        self.place_block(screen_x/2, screen_y/2)
+        self.place_block(screen_x/2, screen_y/2, 0)
 
     def place_block(self, x_coord, y_coord, angle = None):
         if angle is None:
@@ -210,8 +212,8 @@ class TowerBuildingEnv(gym.Env):
             validity_punishment = self.mu
             #validity_punishment = 0
         #print(f"Progress: {w_h_progress:.4f}, Closeness: {closeness_progress:.4f}, Stability: {stability_punishment:.4f}, Efficiency: {efficiency_punishment:.4f}, Validity: {validity_punishment:.4f}")
-        self.current_score = w_h_progress + closeness_progress + stability_punishment + efficiency_punishment + validity_punishment
-
+        self.current_score = w_h_progress + closeness_progress + stability_punishment + efficiency_punishment + validity_punishment + 40
+        self.highest_score = max(self.highest_score, self.current_score)
         #4 Record the step, score, width, height, and validity
         self.records.append((self.steps, self.current_score, self.width, self.height, self.is_valid))
         return (self.steps, self.current_score, self.width, self.height, self.is_valid)
@@ -243,6 +245,9 @@ class TowerBuildingEnv(gym.Env):
     def check_done(self):
         # Did the tower reach the goal? Did it collapse? etc...
         if self.check_win():
+
+            # Plot the score progress
+            
             import matplotlib.pyplot as plt
 
             records = self.records
@@ -281,14 +286,14 @@ class TowerBuildingEnv(gym.Env):
             final_step = self.steps
             final_score = self.current_score
             # Add a title
-            plt.title(f'Tower Building Progress\nFinal Steps: {final_step}\nFinal Score: {final_score}')
+            plt.title(f'Tower Building Progress Episode {self.episode}\nFinal Steps: {final_step}\nFinal Score: {final_score}\nHighest Score: {self.highest_score}')
 
             # Adjust the plot layout
             fig.tight_layout()
 
-            plt.savefig('score_plot.png')
+            plt.savefig(f'score_plot_episode_{self.episode}.png')
             os.system('xdg-open score_plot.png')
-
+            
             return True
         else:
             return False
@@ -304,12 +309,14 @@ class TowerBuildingEnv(gym.Env):
     
     def get_screen(self):
         raw_screen = pygame.surfarray.array3d(self.screen)
-
         gray_image = Image.fromarray(raw_screen).convert('L')
-        gray_image.save(f'screenshot_{self.image_index}.png')
-        resized_screen = gray_image.resize((84, 84), Image.BILINEAR)
+        
+        # Save gray image
+        #gray_image.save(f'screenshot_{self.image_index}.png')
+        
+        resized_screen = gray_image.resize((256, 256), Image.BILINEAR)
         # Save resized gray image
-        resized_screen.save(f'screenshot_resized_{self.image_index}.png')
+        #resized_screen.save(f'screenshot_resized_{self.image_index}.png')
         #resized_screen.save(f'screenshot_resized_{self.image_index}.png')
 
         resized_screen = np.array(resized_screen, dtype=np.uint8)/255.0
@@ -320,6 +327,10 @@ class TowerBuildingEnv(gym.Env):
         return resized_screen
 
     def reset(self):
+        # Remove all existing bodies
+        for block in self.blocks:
+            self.world.DestroyBody(block.body)
+
         # Image index
         self.image_index = 0
 
@@ -340,11 +351,12 @@ class TowerBuildingEnv(gym.Env):
         self.height = 0
         self.blocks = []
         self.current_score = 0
+        self.highest_score = 0
         self.steps = 0
         self.records = [] # (step, score, width, height, self.is_valid)
 
         # Place the first block
-        self.place_block(self.screen_x/2, self.screen_y/2)
+        self.place_block(self.screen_x/2, self.screen_y/2, 0)
     
     def render(self):
         # Clear the screen (Example: Fill with white)

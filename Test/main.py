@@ -30,11 +30,11 @@ LEARNING_RATE = 0.001
 DISCOUNT_FACTOR = 0.95
 REPLAY_BUFFER_CAPACITY = 10000
 EPSILON = 1.0 # Initial exploration rate
-EPSILON_DECAY = 0.995 # How quickly exploration decreases
+EPSILON_DECAY = 0.9999 # How quickly exploration decreases
 BATCH_SIZE = 100
 GAMMA = 0.99 # Discount factor
 TAU = 0.01 # Soft update rate
-NOISE = 0.1 # Exploration noise
+NOISE = 20 # Exploration noise
 
 # Initialize environment, replay buffer, and model
 env = TowerBuildingEnv(screen_x = SCREEN_X,
@@ -47,10 +47,9 @@ env = TowerBuildingEnv(screen_x = SCREEN_X,
 replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
 
 state_size = env.get_screen().shape
-print(f"State size: {state_size}")
 action_size = 3 # x, y, and rotation
-hidden_layers_actor = [400, 128]
-hidden_layers_critic = [400, 128]
+hidden_layers_actor = [400, 400]
+hidden_layers_critic = [400, 400]
 actor = ActorNetwork(state_size, action_size, hidden_layers_actor)
 critic = CriticNetwork(state_size, action_size, hidden_layers_critic)
 target_actor = copy.deepcopy(actor)
@@ -65,37 +64,44 @@ score_history = []
 # Training loop
 for episode in range(NUM_EPISODES):
     env.reset()
-    is_valid = env.is_valid
-    state = env.get_screen()
-    state = torch.tensor(np.array(state)).unsqueeze(0).float()
-    action = (random.randint(0, 600), random.randint(0, 600), random.uniform(0, 180))
-    done = False
-
+    EPSILON = max(EPSILON * EPSILON_DECAY, 0.01)
+    
     while True: # Every loop places a new block
         stop = False
+
+        # The action for the first placement
+        action = (SCREEN_X / 2, SCREEN_Y / 2, 0)
 
         # Run the simulation until the tower is stable
         while stop == False or env.calculate_stability()[1] >= 0.01:
             env.world.Step(1/60, 6, 2)
             env.clock.tick(10000)
-            env.render()
+            #env.render()
             pygame.display.flip()
             stop = True
         
-        score = env.update_records()[1] # return the latest step, score, width, and height
+        state = env.get_screen()
+        state = torch.tensor(np.array(state)).unsqueeze(0).float()
+
+        step, score, width, height, validity = env.update_records()
         new_state = env.get_screen()
         new_state = torch.tensor(np.array(new_state)).unsqueeze(0).float()
         done = env.check_done()
-        print(f"Episode: {episode}, Score: {score}, Done: {done}")
+        episode_string = f"Episode: {episode}\n"
+        #print("Episode: ", episode)
+        record_string = f"Height: {height:.4f}, Width: {width:.4f}, Score: {score:.4f}, Done: {done}\n"
+        #print(f"Height: {height:.4f}, Width: {width:.4f}, Score: {score:.4f}, Done: {done}")
 
-        replay_buffer.store(state, action, score, new_state, done, is_valid)
+        replay_buffer.store(state, action, score, new_state, done, validity)
         if len(replay_buffer) > BATCH_SIZE:
             batch = replay_buffer.sample_batch(BATCH_SIZE)
 
             # Calculate critic loss
             current_q_values = critic(state, action)
             with torch.no_grad():
-                new_action = target_actor(new_state)
+                new_action = target_actor(new_state)[0]
+                new_action[0:2] = torch.clamp(torch.tensor(action[0:2]), min=0, max=600)
+                new_action[2] = torch.clamp(torch.tensor(action[2]), min=0, max=180)
                 target_q_values = target_critic(new_state, new_action)
                 target_q = score + (GAMMA * target_q_values * (1 - done))
 
@@ -105,7 +111,7 @@ for episode in range(NUM_EPISODES):
             critic_optimizer.step()
 
             # Calculate actor loss
-            actor_loss = -critic(state, actor(state)).mean()
+            actor_loss = -critic(state, actor(state)[0]).mean()
             actor_optimizer.zero_grad()
             actor_loss.backward()
             actor_optimizer.step()
@@ -122,15 +128,23 @@ for episode in range(NUM_EPISODES):
 
         state = new_state
         if random.random() > EPSILON:
-            action = actor(state).detach().numpy() # Convert to numpy array
+            action = actor(state)[0].detach().numpy() # Convert to numpy array
             action[0:2] = torch.clamp(torch.tensor(action[0:2]), min=0, max=600)
             action[2] = torch.clamp(torch.tensor(action[2]), min=0, max=180)
             action += NOISE
+            action_string = f"Exploitation Action: {action}\n"
+            #print(f"Exploitation Action: , {action}")
         #action = select_action(state, model, EPSILON)
         else:
             action = (random.randint(0, 600), random.randint(0, 600), random.uniform(0, 180))
+            action_string = f"Exploration Action: {action}\n"
+            #print(f"Exploration Action: , {action}")
         env.step(action)
         EPSILON *= EPSILON_DECAY
+        score_history_string = f"Score History: , {score_history}\n"
+        #print(f"Score History: , {score_history}\n")
+        print(episode_string+record_string+action_string+score_history_string)
+    env.episode += 1
 
 fig, ax1 = plt.subplots()
 
