@@ -44,8 +44,7 @@ while True:
         if done:
             print(f"win!")
             break
-    
-    action = (random.randint(0, 600), random.randint(0, 600), random.uniform(0, 180))
+    action = (random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 180))
     env.step(action)
 
 #env.close()

@@ -79,21 +79,21 @@ class TowerBuildingEnv(gym.Env):
         ## stability punishment = kappa * (average_speed + max_speed)
         self.kappa = -0.01
         ## efficiency punishment = delta * block_num
-        self.delta = -0.05
+        self.delta = -0.1
         ## validity punishment = mu, mu < 0
         self.mu = -5.0
 
         # Place the first block
-        self.place_block(screen_x/2, screen_y/2, 0)
+        self.place_block(0.5, 0.5, 0)
 
-    def place_block(self, x_coord, y_coord, angle = None):
+    def place_block(self, x_norm, y_norm, angle = None):
         if angle is None:
             angle = random.uniform(0, 180) * (np.pi / 180)
         else:
             angle = angle * (np.pi / 180)
         
         new_body = self.world.CreateDynamicBody(
-            position = (x_coord/self.ppm, y_coord/self.ppm),
+            position = (self.screen_x * x_norm/self.ppm, self.screen_y * y_norm/self.ppm),
             #angle = random.choice([0, 45, 90]) * (np.pi / 180),
             angle = angle,
         )
@@ -106,8 +106,7 @@ class TowerBuildingEnv(gym.Env):
         self.is_valid = False
         self.is_valid_close = False
 
-        x_coord, y_coord, angle = action[0], action[1], action[2]
-
+        x_coord, y_coord, angle = action[0] * self.screen_x, action[1] * self.screen_y, action[2]
         ### Attempt to find a valid and close placement within 1 single loop
         '''
         while True:
@@ -136,8 +135,9 @@ class TowerBuildingEnv(gym.Env):
         ### Attempt 1 placement per loop, if valid placement is found place a block
         self.is_valid, self.closest_squared = self.is_valid_placement(x_coord, y_coord)
         if self.is_valid:
-            block_x_coord, block_y_coord = x_coord, y_coord
-            self.place_block(block_x_coord, block_y_coord, angle)
+            print("Valid placement found")
+            block_x_norm, block_y_norm = action[0], action[1]
+            self.place_block(block_x_norm, block_y_norm, angle)
         else:
             self.closest_squared = 10000.0 # Set the closest squared to a value that yields a zero reward
 
@@ -356,7 +356,7 @@ class TowerBuildingEnv(gym.Env):
         self.records = [] # (step, score, width, height, self.is_valid)
 
         # Place the first block
-        self.place_block(self.screen_x/2, self.screen_y/2, 0)
+        self.place_block(0.5, 0.5, 0)
     
     def render(self):
         # Clear the screen (Example: Fill with white)

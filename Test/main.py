@@ -17,7 +17,7 @@ import copy
 # Environment parameters
 SCREEN_X = 600
 SCREEN_Y = 600
-GOAL_WIDTH = 300
+GOAL_WIDTH = 500
 GOAL_HEIGHT = 250
 GRID_SIZE = 30
 MAX_JOINTS = 20
@@ -34,7 +34,7 @@ EPSILON_DECAY = 0.9999 # How quickly exploration decreases
 BATCH_SIZE = 100
 GAMMA = 0.99 # Discount factor
 TAU = 0.01 # Soft update rate
-NOISE = 20 # Exploration noise
+NOISE = 0 # Exploration noise
 
 # Initialize environment, replay buffer, and model
 env = TowerBuildingEnv(screen_x = SCREEN_X,
@@ -60,17 +60,21 @@ critic_optimizer = optim.Adam(critic.parameters(), lr=LEARNING_RATE)
 
 loss_history = []
 score_history = []
+step_index = 0
+step_history = {}
 
 # Training loop
 for episode in range(NUM_EPISODES):
     env.reset()
-    EPSILON = max(EPSILON * EPSILON_DECAY, 0.01)
+    EPSILON = max(EPSILON * EPSILON_DECAY, 0.01)    
+    action_index = 0
+    action_history = {}
     
     while True: # Every loop places a new block
         stop = False
 
         # The action for the first placement
-        action = (SCREEN_X / 2, SCREEN_Y / 2, 0)
+        action = (0.5, 0.5, 0)
 
         # Run the simulation until the tower is stable
         while stop == False or env.calculate_stability()[1] >= 0.01:
@@ -121,9 +125,9 @@ for episode in range(NUM_EPISODES):
             _update_target(target_critic, critic, TAU)
 
             loss_history.append(critic_loss.item()) # Store critic loss
+            score_history.append(score)
 
         if done:
-            score_history.append(score)
             break
 
         state = new_state
@@ -133,18 +137,33 @@ for episode in range(NUM_EPISODES):
             action[2] = torch.clamp(torch.tensor(action[2]), min=0, max=180)
             action += NOISE
             action_string = f"Exploitation Action: {action}\n"
+            action_history[action_index] = action_string
+            step_history[step_index] = action_string
             #print(f"Exploitation Action: , {action}")
         #action = select_action(state, model, EPSILON)
         else:
-            action = (random.randint(0, 600), random.randint(0, 600), random.uniform(0, 180))
+            action = (random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 180))
             action_string = f"Exploration Action: {action}\n"
+            action_history[action_index] = action_string
+            step_history[step_index] = action_string
             #print(f"Exploration Action: , {action}")
+        action_index += 1
         env.step(action)
         EPSILON *= EPSILON_DECAY
-        score_history_string = f"Score History: , {score_history}\n"
+        #score_history_string = f"Score History: , {score_history}\n"
         #print(f"Score History: , {score_history}\n")
-        print(episode_string+record_string+action_string+score_history_string)
+        print(episode_string+record_string+action_string)
+
+    # Save action history to a text file
+    with open(f'/home/yucblob/src/ML/action_history_episode_{env.episode}.txt', 'w') as file:
+        for index, action_string in action_history.items():
+            file.write(f"Action {index}: {action_string}\n")
     env.episode += 1
+
+# Save step history to a text file
+with open(f'/home/yucblob/src/ML/step_history.txt', 'w') as file:
+    for index, action_string in step_history.items():
+        file.write(f"Step {index}: {action_string}\n")
 
 fig, ax1 = plt.subplots()
 
@@ -162,5 +181,5 @@ ax2.tick_params(axis='y', labelcolor=color)
 
 fig.tight_layout()
 plt.title('DQN Training Loss and Performance')
-plt.savefig('oss_and_score_plot.png')
+plt.savefig('loss_and_score_plot.png')
 os.system('xdg-open loss_and_score_plot.png')
