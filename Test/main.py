@@ -19,7 +19,8 @@ SCREEN_X = 600
 SCREEN_Y = 600
 GOAL_WIDTH = 500
 GOAL_HEIGHT = 250
-GRID_SIZE = 30
+BLOCK_WIDTH = 10
+BLOCK_HEIGHT = 20
 MAX_JOINTS = 20
 
 NUM_EPISODES = 500
@@ -41,7 +42,8 @@ env = TowerBuildingEnv(screen_x = SCREEN_X,
                         screen_y = SCREEN_Y,
                         goal_width = GOAL_WIDTH,
                         goal_height = GOAL_HEIGHT,
-                        grid_size = GRID_SIZE,
+                        block_width = BLOCK_WIDTH,
+                        block_height = BLOCK_HEIGHT,
                         max_joints = MAX_JOINTS)
 
 replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)

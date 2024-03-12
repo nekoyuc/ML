@@ -7,8 +7,14 @@ import random
 replay_buffer = ReplayBuffer(10000)
 
 # Create the environment
-# Screen_x, screen_y, goal_width, goal_height, grid_size, max_joints, replay_buffer
-env = TowerBuildingEnv(600, 600, 300, 250, 30, 20)
+# screen_x, screen_y, goal_width, goal_height, max_joints
+env = TowerBuildingEnv(screen_x = 1200,
+                       screen_y = 800,
+                       goal_width= 600,
+                       goal_height = 600,
+                       block_width = 10,
+                       block_height = 20,
+                       max_joints = 20)
 
 while True:
     stop = False
@@ -16,7 +22,7 @@ while True:
     #env.step(action)
     while (stop == False or env.calculate_stability()[1] >= 0.005):
         env.world.Step(1/60, 6, 2)
-        env.clock.tick(5000)
+        env.clock.tick(20000)
         env.render()
         pygame.display.flip()
         stop = True

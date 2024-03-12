@@ -18,8 +18,7 @@ class TowerBuildingEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
     # Definition with grid size
-    def __init__(self, screen_x, screen_y, goal_width, goal_height, grid_size, max_joints):
-    
+    def __init__(self, screen_x, screen_y, goal_width, goal_height, block_width, block_height, max_joints):    
         # Pygame Initialization
         pygame.init()
 
@@ -30,14 +29,15 @@ class TowerBuildingEnv(gym.Env):
         self.screen = pygame.display.set_mode((screen_x, screen_y))
         self.goal_width = goal_width
         self.goal_height = goal_height
+        self.block_width = block_width
+        self.block_height = block_height
+        self.block_radius = 0.6 * np.sqrt(self.block_width ** 2 + self.block_height ** 2)
         self.max_joints = max_joints
-        self.grid_size = grid_size
-        self.cell_size = (screen_x // grid_size, screen_y // grid_size) # (20, 20) pixels per grid cell
         self.clock = pygame.time.Clock()
         self.block_colors = [(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for _ in range(100)]
         self.ppm = 20.0  # pixels per meter
         self.ground = self.world.CreateStaticBody(position=(0, 0))
-        self.ground.CreateEdgeFixture(vertices=[(-1500, 0), (1500, 0)], density=1, friction=0.3)
+        self.ground.CreateEdgeFixture(vertices=[(-2000, 0), (2000, 0)], density=1, friction=0.3)
 
         # Image index
         self.episode = 0
@@ -52,7 +52,6 @@ class TowerBuildingEnv(gym.Env):
         self.is_valid = False
         self.is_valid_close = False
         self.closest_squared = 10000.0 # Set the closest squared to a value that yields a zero reward
-        self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # 22.3 pixels
         self.max_vicinity_squared = 5000
 
         # State variables
@@ -81,7 +80,7 @@ class TowerBuildingEnv(gym.Env):
         ## stability punishment = kappa * (average_speed + max_speed)
         self.kappa = -0.01
         ## efficiency punishment = delta * block_num
-        self.delta = -0.08
+        self.delta = -0.05
         ## validity punishment = mu, mu < 0
         self.mu = -5.0
 
@@ -99,7 +98,7 @@ class TowerBuildingEnv(gym.Env):
             #angle = random.choice([0, 45, 90]) * (np.pi / 180),
             angle = angle,
         )
-        new_block = new_body.CreatePolygonFixture(box = (self.cell_size[0]/self.ppm, self.cell_size[1]/2/self.ppm), density = 1, friction = 0.3)
+        new_block = new_body.CreatePolygonFixture(box = (self.block_width/self.ppm, self.block_height/self.ppm), density = 1, friction = 0.3)
         self.blocks.append(new_block)
         self.new_block = new_block
 
@@ -150,7 +149,7 @@ class TowerBuildingEnv(gym.Env):
         )
         
         # Create a temporary circular fixture attached to the potential block body
-        p_f = potential_block_body.CreateCircleFixture(radius=50/self.ppm, density=1, friction=0.3)
+        p_f = potential_block_body.CreateCircleFixture(radius = self.block_radius/self.ppm, density=1, friction=0.3)
 
         closest_squared = 360000.0
         for e in self.blocks:
@@ -160,7 +159,6 @@ class TowerBuildingEnv(gym.Env):
             else:
                 block_x_coord = e.body.position.x * self.ppm
                 block_y_coord = e.body.position.y * self.ppm
-                #block_x_coord, block_y_coord = self.grid_to_world_coords(e.body.position.x, e.body.position.y)
                 dist_squared = (block_x_coord - grid_x_coord) ** 2 + (block_y_coord - grid_y_coord) ** 2
                 closest_squared =  min(dist_squared, closest_squared)
         
@@ -181,9 +179,6 @@ class TowerBuildingEnv(gym.Env):
         b = random.randint(0, 255)
         return (r, g, b)
     
-    def grid_to_world_coords(self, grid_x, grid_y):
-        return grid_x * self.cell_size[0] + self.cell_size[0] // 2, grid_y * self.cell_size[1] + self.cell_size[1] // 2
- 
     def update_records(self): # return the latest step, score, width, and height
         #1 Update the step count
         self.steps += 1
@@ -278,7 +273,7 @@ class TowerBuildingEnv(gym.Env):
             ax1.set_xlabel('Steps')
             ax1.set_ylabel('Score', color='b')
             ax1.tick_params('y', colors='b')
-            ax1.set_xlim(0, 250)
+            #ax1.set_xlim(0, 250)
             ax1.set_ylim(-0.3, 1.0)
 
             # Create a second y-axis
@@ -288,8 +283,7 @@ class TowerBuildingEnv(gym.Env):
             ax2.plot(x, w, 'r-', label='Width vs Steps')
             ax2.set_ylabel('Width', color='r')
             ax2.tick_params('y', colors='r')
-            ax1.set_xlim(0, 250)
-            ax2.set_ylim(0, 1400)
+            ax2.set_ylim(0, 2500)
 
             # Create a third y-axis
             ax3 = ax1.twinx()
@@ -301,7 +295,6 @@ class TowerBuildingEnv(gym.Env):
             ax3.plot(x, h, 'g-', label='Height vs Steps')
             ax3.set_ylabel('Height', color='g')
             ax3.tick_params('y', colors='g')
-            ax1.set_xlim(0, 250)
             ax3.set_ylim(0, 270)
 
             # Create a forth y-axis
@@ -314,7 +307,6 @@ class TowerBuildingEnv(gym.Env):
             ax4.plot(x, w_progress, 'c-', label='Width Progress vs Steps')
             ax4.set_ylabel('Width Progress', color='c')
             ax4.tick_params('y', colors='c')
-            ax1.set_xlim(0, 250)
             ax4.set_ylim(-0.3, 1.0)
 
             # Create a fifth y-axis
@@ -327,7 +319,6 @@ class TowerBuildingEnv(gym.Env):
             ax5.plot(x, h_reward, 'm-', label='Height Reward vs Steps')
             ax5.set_ylabel('Height Reward', color='m')
             ax5.tick_params('y', colors='m')
-            ax1.set_xlim(0, 250)
             ax5.set_ylim(-0.3, 1.0)
 
             # Create a sixth y-axis
@@ -340,7 +331,6 @@ class TowerBuildingEnv(gym.Env):
             ax6.plot(x, closeness_progress, 'y-', label='Closeness Progress vs Steps')
             ax6.set_ylabel('Closeness Progress', color='y')
             ax6.tick_params('y', colors='y')
-            ax1.set_xlim(0, 250)
             ax6.set_ylim(-0.3, 1.0)
 
             final_step = self.steps
@@ -403,7 +393,6 @@ class TowerBuildingEnv(gym.Env):
         self.is_valid = False
         self.is_valid_close = False
         self.closest_squared = 10000.0 # Set the closest squared to a value that yields a zero reward
-        self.block_radius = self.cell_size[0] * 0.5 * np.sqrt(5) # 22.3 pixels
         self.max_vicinity_squared = 5000
 
         # State variables
@@ -424,8 +413,10 @@ class TowerBuildingEnv(gym.Env):
 
         # Example: Draw the ground plane
         ground_y = self.ground.position.y  # Assuming the ground is at y=0
+        pygame.draw.line(self.screen, (0, 0, 0), (-2000, self.ground.position.y), (2000, self.ground.position.y), 1)
         #pygame.draw.rect(self.screen, (100, 100, 100), (0, ground_y, self.screen_x, self.screen_y - ground_y))
 
+        pygame.draw.line(self.screen, (0, 0, 0), (0, 0), (300, 0), 5)
         # Draw blocks 
         for i, block in enumerate(self.blocks):
             # draw colorful blocks
@@ -438,7 +429,7 @@ class TowerBuildingEnv(gym.Env):
         for fixture in body.fixtures:
             shape = fixture.shape
             vertices = [(body.transform * v) * self.ppm for v in shape.vertices]
-            vertices = [(v[0], 600 - v[1]) for v in vertices]
+            vertices = [(v[0], self.screen_y - v[1]) for v in vertices]
             pygame.draw.polygon(self.screen, color, vertices)
 
 
