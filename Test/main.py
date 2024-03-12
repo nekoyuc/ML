@@ -62,6 +62,7 @@ loss_history = []
 score_history = []
 step_index = 0
 step_history = {}
+critic_loss = 0
 
 # Training loop
 for episode in range(NUM_EPISODES):
@@ -69,34 +70,49 @@ for episode in range(NUM_EPISODES):
     EPSILON = max(EPSILON * EPSILON_DECAY, 0.01)    
     action_index = 0
     action_history = {}
+    score = 0
+    state = env.get_screen()
+    state = torch.tensor(np.array(state)).unsqueeze(0).float()
+    action = (0.5, 0.5, 0)
     
     while True: # Every loop places a new block
         stop = False
-
-        # The action for the first placement
-        action = (0.5, 0.5, 0)
 
         # Run the simulation until the tower is stable
         while stop == False or env.calculate_stability()[1] >= 0.01:
             env.world.Step(1/60, 6, 2)
             env.clock.tick(10000)
-            #env.render()
+            env.render()
             pygame.display.flip()
             stop = True
         
-        state = env.get_screen()
-        state = torch.tensor(np.array(state)).unsqueeze(0).float()
-
-        step, score, width, height, validity = env.update_records()
+        # New step stats
+        score, width, height, validity = env.update_records()[1:5]
         new_state = env.get_screen()
         new_state = torch.tensor(np.array(new_state)).unsqueeze(0).float()
         done = env.check_done()
+
+        # Store state from the old step before the action, and the action
+        # Store the score, new state, done, validity after the action
+        replay_buffer.store(state, action, score, new_state, done, validity)
+
+        # Update state
+        state = new_state
+
+        # Debugging: Save state to a local txt file
+        '''
+        state_numpy = state.detach().numpy()
+        state_numpy = state_numpy.squeeze()
+        print("State shape: ", state_numpy.shape)
+        # Save state_numpy to a local txt file
+        np.savetxt(f'state_numpy_{episode}_{env.image_index}.txt', state_numpy)
+        '''
+
         episode_string = f"Episode: {episode}\n"
         #print("Episode: ", episode)
         record_string = f"Height: {height:.4f}, Width: {width:.4f}, Score: {score:.4f}, Done: {done}\n"
         #print(f"Height: {height:.4f}, Width: {width:.4f}, Score: {score:.4f}, Done: {done}")
 
-        replay_buffer.store(state, action, score, new_state, done, validity)
         if len(replay_buffer) > BATCH_SIZE:
             batch = replay_buffer.sample_batch(BATCH_SIZE)
 
@@ -104,7 +120,6 @@ for episode in range(NUM_EPISODES):
             current_q_values = critic(state, action)
             with torch.no_grad():
                 new_action = target_actor(new_state)[0]
-                new_action[2] = torch.clamp(torch.tensor(action[2]), min=0, max=180)
                 target_q_values = target_critic(new_state, new_action)
                 target_q = score + (GAMMA * target_q_values * (1 - done))
 
@@ -123,18 +138,16 @@ for episode in range(NUM_EPISODES):
             _update_target(target_actor, actor, TAU)
             _update_target(target_critic, critic, TAU)
 
+        if done:
             loss_history.append(critic_loss.item()) # Store critic loss
             score_history.append(score)
-
-        if done:
             break
 
-        state = new_state
+        # Select action
         if random.random() > EPSILON:
             action = actor(state)[0]
             action = action.detach().numpy() # Convert to numpy array
             action_string = f"Unclamped Exploitation Action: {action}\n"
-            action[2] = torch.clamp(torch.tensor(action[2]), min=0, max=180)
             action += NOISE
             action_string = action_string + f"Exploitation Action: {action}\n"
             action_history[action_index] = action_string
@@ -142,7 +155,7 @@ for episode in range(NUM_EPISODES):
             #print(f"Exploitation Action: , {action}")
         #action = select_action(state, model, EPSILON)
         else:
-            action = (random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 180))
+            action = (random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1))
             action_string = f"No Action Clamping\nExploration Action: {action}\n"
             action_history[action_index] = action_string
             step_history[step_index] = action_string
@@ -166,7 +179,7 @@ with open(f'/home/yucblob/src/ML/step_history.txt', 'w') as file:
     for index, action_string in step_history.items():
         file.write(f"Step {index}: {action_string}\n")
 
-fig, ax1 = plt.subplots()
+fig, ax1 = plt.subplots(figsize=(16, 9))
 
 color = 'tab:red'
 ax1.set_xlabel('Episode')

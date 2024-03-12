@@ -17,7 +17,9 @@ import matplotlib.pyplot as plt
 class TowerBuildingEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
+    # Definition with grid size
     def __init__(self, screen_x, screen_y, goal_width, goal_height, grid_size, max_joints):
+    
         # Pygame Initialization
         pygame.init()
 
@@ -88,9 +90,9 @@ class TowerBuildingEnv(gym.Env):
 
     def place_block(self, x_norm, y_norm, angle = None):
         if angle is None:
-            angle = random.uniform(0, 180) * (np.pi / 180)
+            angle = random.uniform(0, 1) * np.pi
         else:
-            angle = angle * (np.pi / 180)
+            angle = angle
         
         new_body = self.world.CreateDynamicBody(
             position = (self.screen_x * x_norm/self.ppm, self.screen_y * y_norm/self.ppm),
@@ -106,7 +108,7 @@ class TowerBuildingEnv(gym.Env):
         self.is_valid = False
         self.is_valid_close = False
 
-        x_coord, y_coord, angle = action[0] * self.screen_x, action[1] * self.screen_y, action[2]
+        x_coord, y_coord, angle = action[0] * self.screen_x, action[1] * self.screen_y, action[2] * np.pi
         ### Attempt to find a valid and close placement within 1 single loop
         '''
         while True:
@@ -201,18 +203,19 @@ class TowerBuildingEnv(gym.Env):
         self.height = self.max_h_coord
 
         #3 Update the score
-        w_progress = self.calculate_w_progress()
-        h_reward = self.calculate_h_reward()
-        closeness_progress = self.calculate_closeness()
-        stability_punishment = self.calculate_stability()[2]
-        efficiency_punishment = self.calculate_efficiency()
+        # Divide the score by 100 to scale it to a range between 0 and 1
+        w_progress = self.calculate_w_progress()/100.0
+        h_reward = self.calculate_h_reward()/100.0
+        closeness_progress = self.calculate_closeness()/100.0
+        stability_punishment = self.calculate_stability()[2]/100.0
+        efficiency_punishment = self.calculate_efficiency()/100.0
         if self.is_valid:
             validity_punishment = 0
         else:
-            validity_punishment = self.mu
+            validity_punishment = self.mu/100
             #validity_punishment = 0
         #print(f"Progress: {w_h_progress:.4f}, Closeness: {closeness_progress:.4f}, Stability: {stability_punishment:.4f}, Efficiency: {efficiency_punishment:.4f}, Validity: {validity_punishment:.4f}")
-        self.current_score = w_progress + h_reward + closeness_progress + stability_punishment + efficiency_punishment + validity_punishment + 40
+        self.current_score = w_progress + h_reward + closeness_progress + stability_punishment + efficiency_punishment + validity_punishment + 0.40
         #self.current_score = self.current_score / 100 # Scale the score to a range between 0 and 1
         self.highest_score = max(self.highest_score, self.current_score)
         #4 Record the step, score, width, height, and validity
@@ -276,7 +279,7 @@ class TowerBuildingEnv(gym.Env):
             ax1.set_ylabel('Score', color='b')
             ax1.tick_params('y', colors='b')
             ax1.set_xlim(0, 250)
-            ax1.set_ylim(-30, 100)
+            ax1.set_ylim(-0.3, 1.0)
 
             # Create a second y-axis
             ax2 = ax1.twinx()
@@ -312,7 +315,7 @@ class TowerBuildingEnv(gym.Env):
             ax4.set_ylabel('Width Progress', color='c')
             ax4.tick_params('y', colors='c')
             ax1.set_xlim(0, 250)
-            ax4.set_ylim(-30, 100)
+            ax4.set_ylim(-0.3, 1.0)
 
             # Create a fifth y-axis
             ax5 = ax1.twinx()
@@ -325,7 +328,7 @@ class TowerBuildingEnv(gym.Env):
             ax5.set_ylabel('Height Reward', color='m')
             ax5.tick_params('y', colors='m')
             ax1.set_xlim(0, 250)
-            ax5.set_ylim(-30, 100)
+            ax5.set_ylim(-0.3, 1.0)
 
             # Create a sixth y-axis
             ax6 = ax1.twinx()
@@ -338,7 +341,7 @@ class TowerBuildingEnv(gym.Env):
             ax6.set_ylabel('Closeness Progress', color='y')
             ax6.tick_params('y', colors='y')
             ax1.set_xlim(0, 250)
-            ax6.set_ylim(-30, 100)
+            ax6.set_ylim(-0.3, 1.0)
 
             final_step = self.steps
             final_score = self.current_score
@@ -366,17 +369,17 @@ class TowerBuildingEnv(gym.Env):
     
     def get_screen(self):
         raw_screen = pygame.surfarray.array3d(self.screen)
+
         gray_image = Image.fromarray(raw_screen).convert('L')
-        
         # Save gray image
-        #gray_image.save(f'screenshot_{self.image_index}.png')
+        #gray_image.save(f'screenshot_grey_{self.image_index}.png')
         
         resized_screen = gray_image.resize((256, 256), Image.BILINEAR)
         # Save resized gray image
         #resized_screen.save(f'screenshot_resized_{self.image_index}.png')
         #resized_screen.save(f'screenshot_resized_{self.image_index}.png')
 
-        resized_screen = np.array(resized_screen, dtype=np.uint8)/255.0
+        resized_screen = np.array(resized_screen, dtype=np.float32)/255.0
         # export the raw_screen to a file
         #pygame.image.save(raw_screen, f'screenshot_{self.image_index}.png')
         self.image_index += 1
