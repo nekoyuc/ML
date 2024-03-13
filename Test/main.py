@@ -15,24 +15,24 @@ import copy
 # ... Other RL algorithm imports ...
 
 # Environment parameters
-SCREEN_X = 600
-SCREEN_Y = 600
-GOAL_WIDTH = 500
-GOAL_HEIGHT = 250
+SCREEN_X = 1200
+SCREEN_Y = 800
+GOAL_WIDTH = 600
+GOAL_HEIGHT = 600
 BLOCK_WIDTH = 10
 BLOCK_HEIGHT = 20
 MAX_JOINTS = 20
 
-NUM_EPISODES = 500
+NUM_EPISODES = 5000
 #MAX_STEPS_PER_EPISODE = 1000
 
 # Hyperparameters
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 DISCOUNT_FACTOR = 0.95
 REPLAY_BUFFER_CAPACITY = 10000
 EPSILON = 1.0 # Initial exploration rate
-EPSILON_DECAY = 0.996 # How quickly exploration decreases
-BATCH_SIZE = 100
+EPSILON_DECAY = 0.9995 # How quickly exploration decreases
+BATCH_SIZE = 1000
 GAMMA = 0.99 # Discount factor
 TAU = 0.01 # Soft update rate
 NOISE = 0 # Exploration noise
