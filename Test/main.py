@@ -30,7 +30,7 @@ NUM_EPISODES = 5000
 LEARNING_RATE = 0.0001
 DISCOUNT_FACTOR = 0.95
 REPLAY_BUFFER_CAPACITY = 10000
-EPSILON = 1.0 # Initial exploration rate
+EPSILON = 1.00 # Initial exploration rate
 EPSILON_DECAY = 0.9995 # How quickly exploration decreases
 BATCH_SIZE = 1000
 GAMMA = 0.99 # Discount factor
@@ -75,6 +75,7 @@ for episode in range(NUM_EPISODES):
     score = 0
     state = env.get_screen()
     state = torch.tensor(np.array(state)).unsqueeze(0).float()
+    state = state.unsqueeze(0)
     action = (0.5, 0.5, 0)
     
     while True: # Every loop places a new block
@@ -92,6 +93,7 @@ for episode in range(NUM_EPISODES):
         score, width, height, validity = env.update_records()[1:5]
         new_state = env.get_screen()
         new_state = torch.tensor(np.array(new_state)).unsqueeze(0).float()
+        new_state = new_state.unsqueeze(0)
         done = env.check_done()
 
         # Store state from the old step before the action, and the action

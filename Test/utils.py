@@ -15,9 +15,8 @@ class ActorNetwork(nn.Module):
         self.conv_layers = nn.Sequential(
             nn.Conv2d(in_channels = 1, out_channels = 4, kernel_size = 4, stride = 2),
             nn.ReLU(),
-            nn.Conv2d(in_channels = 4, out_channels = 8, kernel_size = 3, stride = 2),
+            nn.Conv2d(in_channels = 4, out_channels = 16, kernel_size = 3, stride = 2),
             nn.ReLU(),
-            nn.Conv2d(in_channels = 8, out_channels = 1, kernel_size = 3, stride = 2),
             nn.Flatten() # Flatten the output for the fully connected layers below
         ) # input size (1, 256, 256), output size (8, 63, 63)
 
@@ -29,7 +28,8 @@ class ActorNetwork(nn.Module):
             nn.Linear(conv_out_size, hidden_layers[0]),
             nn.ReLU(),
             # ...Additional hidden layers if desired ...
-            nn.Linear(hidden_layers[-1], action_size)
+            nn.Linear(hidden_layers[-1], action_size),
+            nn.ReLU()
         )
 
     def _get_conv_out(self, state_size):
@@ -42,8 +42,7 @@ class ActorNetwork(nn.Module):
     def forward(self, state):
         x = self.conv_layers(state)
         x = self.fc_layers(x)
-        output = torch.sigmoid(x) # Sigmoid activation for the output
-        return output
+        return x
 
 class CriticNetwork(nn.Module):
     def __init__(self, state_size, action_size, hidden_layers):
@@ -105,10 +104,9 @@ class ReplayBuffer:
 
     def sample_batch(self, batch_size):
         #weights = np.array([e[2] + (float(e[5]) * 5) for e in self.experiences]) # Give weights to reward + 5 if valid
-        weights = np.array([e[2] + (float(e[5]) * 5) for e in self.experiences]) # Prioritize based on TD-error
+        weights = np.array([e[2] + (float(e[5])) for e in self.experiences]) # Prioritize based on TD-error
         probabilities = weights / weights.sum()
         indices = np.random.choice(len(self.experiences), batch_size, p = probabilities)
-        indices = np.random.choice(len(self.experiences), batch_size, p=probabilities)
         batch = [self.experiences[index] for index in indices]
         return batch
 
