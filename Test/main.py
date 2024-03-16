@@ -11,14 +11,16 @@ from utils import ActorNetwork, CriticNetwork, ReplayBuffer, _update_target
 import matplotlib.pyplot as plt
 import os
 import copy
+import argparse
+import os
 
 # ... Other RL algorithm imports ...
 
 # Environment parameters
-SCREEN_X = 1200
-SCREEN_Y = 800
-GOAL_WIDTH = 600
-GOAL_HEIGHT = 600
+SCREEN_X = 600
+SCREEN_Y = 600
+GOAL_WIDTH = 400
+GOAL_HEIGHT = 250
 BLOCK_WIDTH = 10
 BLOCK_HEIGHT = 20
 MAX_JOINTS = 20
@@ -36,6 +38,14 @@ BATCH_SIZE = 1000
 GAMMA = 0.99 # Discount factor
 TAU = 0.01 # Soft update rate
 NOISE = 0 # Exploration noise
+
+# Parse "--disable-rendering" argument
+parser = argparse.ArgumentParser()
+parser.add_argument("--disable-rendering", action="store_true")
+parser.add_argument("--experiment-name", type=str, default="experiment")
+args = parser.parse_args()
+# Create experiment dir if it doesn't exist
+os.makedirs(args.experiment_name, exist_ok=True)
 
 # Initialize environment, replay buffer, and model
 env = TowerBuildingEnv(screen_x = SCREEN_X,
@@ -65,6 +75,7 @@ score_history = []
 step_index = 0
 step_history = {}
 critic_loss = 0
+last_flip_time = 0
 
 # Training loop
 for episode in range(NUM_EPISODES):
@@ -83,10 +94,13 @@ for episode in range(NUM_EPISODES):
 
         # Run the simulation until the tower is stable
         while stop == False or env.calculate_stability()[1] >= 0.01:
-            env.world.Step(1/60, 6, 2)
+            env.world.Step(1/10, 6, 2) #Check this step
             env.clock.tick(10000)
             env.render()
-            pygame.display.flip()
+            # Only flip if 16ms have passed since last flip
+            if not args.disable_rendering:
+                pygame.display.flip()
+                last_flip_time = pygame.time.get_ticks()
             stop = True
         
         # New step stats
@@ -118,13 +132,23 @@ for episode in range(NUM_EPISODES):
         #print(f"Height: {height:.4f}, Width: {width:.4f}, Score: {score:.4f}, Done: {done}")
 
         if len(replay_buffer) > BATCH_SIZE:
+            # Sample a batch of experiences
             batch = replay_buffer.sample_batch(BATCH_SIZE)
+            states, actions, scores, next_states, dones, validities = zip(*batch)
+
+            # Convert to tensors
+            actions = torch.tensor(actions).float()
+            rewards = torch.tensor(scores).float()
+            dones = torch.tensor(dones).float()
+            validities = torch.tensor(validities).float()
 
             # Calculate critic loss
-            current_q_values = critic(state, action)
+            current_q_values = critic(states, actions)
             with torch.no_grad():
-                new_action = target_actor(new_state)[0]
-                target_q_values = target_critic(new_state, new_action)
+                new_actions = target_actor(new_states)[0]
+                print("New Actions: ", new_actions)
+                print("New Actions Shape: ", new_actions.shape)
+                target_q_values = target_critic(new_states, new_actions)
                 target_q = score + (GAMMA * target_q_values * (1 - done))
 
             critic_loss = nn.MSELoss()(current_q_values, target_q)
@@ -133,7 +157,7 @@ for episode in range(NUM_EPISODES):
             critic_optimizer.step()
 
             # Calculate actor loss
-            actor_loss = -critic(state, actor(state)[0]).mean()
+            actor_loss = -critic(states, actor(states)[0]).mean()
             actor_optimizer.zero_grad()
             actor_loss.backward()
             actor_optimizer.step()
@@ -143,7 +167,7 @@ for episode in range(NUM_EPISODES):
             _update_target(target_critic, critic, TAU)
 
         if done:
-            loss_history.append(critic_loss.item()) # Store critic loss
+            loss_history.append(critic_loss) # Store critic loss
             score_history.append(score)
             break
 
@@ -173,7 +197,10 @@ for episode in range(NUM_EPISODES):
 
     EPSILON *= EPSILON_DECAY
     # Save action history of last episode to a text file
-    with open(f'/home/yucblob/src/ML/action_history_episode_{env.episode}.txt', 'w') as file:
+    # Create the file if it doesn't exist
+
+    filename = args.experiment_name + f'/action_history_episode_{env.episode}.txt'
+    with open(filename, 'w') as file:
         for index, action_string in action_history.items():
             file.write(f"Action {index}: {action_string}\n")
     env.episode += 1

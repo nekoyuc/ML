@@ -14,9 +14,9 @@ class ActorNetwork(nn.Module):
         # Adjust the 'in_channels' parameter if RGB images are used
         self.conv_layers = nn.Sequential(
             nn.Conv2d(in_channels = 1, out_channels = 4, kernel_size = 4, stride = 2),
-            nn.ReLU(),
+            nn.ReLU(), # 127 x 127, 4 channels
             nn.Conv2d(in_channels = 4, out_channels = 16, kernel_size = 3, stride = 2),
-            nn.ReLU(),
+            nn.ReLU(), # 63 x 63, 16 channels
             nn.Flatten() # Flatten the output for the fully connected layers below
         ) # input size (1, 256, 256), output size (8, 63, 63)
 
@@ -34,7 +34,7 @@ class ActorNetwork(nn.Module):
 
     def _get_conv_out(self, state_size):
         # Calculate output size of the convolutional layers
-        dummy_input = torch.zeros(1, *state_size) # batch size 1, state_size (1, 256, 256)
+        dummy_input = torch.zeros(1, 1, *state_size) # batch size 1, state_size (1, 256, 256)
         output = self.conv_layers(dummy_input) # Pass through convolutional layers
         conv_out_size = output.size()[1:].numel() # Calculate the output size
         return conv_out_size
