@@ -77,7 +77,7 @@ class CriticNetwork(nn.Module):
         )
 
     def _get_combined_size(self,state_size, action_size):
-        dummy_state = torch.zeros(1, *state_size) # batch size 1, state_size (1, 256, 256)
+        dummy_state = torch.zeros(1, 1, *state_size) # batch size 1, state_size (1, 256, 256)
         dummy_action = torch.zeros(1, action_size) # batch size 1, action_size
 
         x_state = self.conv_state(dummy_state)
