@@ -273,8 +273,8 @@ class TowerBuildingEnv(gym.Env):
             ax1.set_xlabel('Steps')
             ax1.set_ylabel('Score', color='b')
             ax1.tick_params('y', colors='b')
-            ax1.set_xlim(0, 1500)
-            ax1.set_ylim(-1.0, 5.0)
+            ax1.set_xlim(0, 300)
+            ax1.set_ylim(-0.3, 1.0)
 
             # Create a second y-axis
             ax2 = ax1.twinx()
@@ -283,7 +283,7 @@ class TowerBuildingEnv(gym.Env):
             ax2.plot(x, w, 'r-', label='Width vs Steps')
             ax2.set_ylabel('Width', color='r')
             ax2.tick_params('y', colors='r')
-            ax2.set_ylim(0, 3000)
+            ax2.set_ylim(0, 1500)
 
             # Create a third y-axis
             ax3 = ax1.twinx()
@@ -295,7 +295,7 @@ class TowerBuildingEnv(gym.Env):
             ax3.plot(x, h, 'g-', label='Height vs Steps')
             ax3.set_ylabel('Height', color='g')
             ax3.tick_params('y', colors='g')
-            ax3.set_ylim(0, 700)
+            ax3.set_ylim(0, 300)
 
             # Create a forth y-axis
             ax4 = ax1.twinx()
@@ -307,7 +307,7 @@ class TowerBuildingEnv(gym.Env):
             ax4.plot(x, w_progress, 'c-', label='Width Progress vs Steps')
             ax4.set_ylabel('Width Progress', color='c')
             ax4.tick_params('y', colors='c')
-            ax4.set_ylim(-1.0, 5.0)
+            ax4.set_ylim(-0.3, 1.0)
 
             # Create a fifth y-axis
             ax5 = ax1.twinx()
@@ -319,7 +319,7 @@ class TowerBuildingEnv(gym.Env):
             ax5.plot(x, h_reward, 'm-', label='Height Reward vs Steps')
             ax5.set_ylabel('Height Reward', color='m')
             ax5.tick_params('y', colors='m')
-            ax5.set_ylim(-1.0, 5.0)
+            ax5.set_ylim(-0.3, 1.0)
 
             # Create a sixth y-axis
             ax6 = ax1.twinx()
@@ -331,7 +331,7 @@ class TowerBuildingEnv(gym.Env):
             ax6.plot(x, closeness_progress, 'y-', label='Closeness Progress vs Steps')
             ax6.set_ylabel('Closeness Progress', color='y')
             ax6.tick_params('y', colors='y')
-            ax6.set_ylim(-1.0, 5.0)
+            ax6.set_ylim(-0.3, 1.0)
 
             final_step = self.steps
             final_score = self.current_score

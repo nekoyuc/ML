@@ -86,7 +86,6 @@ for episode in range(NUM_EPISODES):
     score = 0
     state = env.get_screen()
     state = torch.tensor(np.array(state)).unsqueeze(0).float()
-    state = state.unsqueeze(0)
     action = (0.5, 0.5, 0)
     
     while True: # Every loop places a new block
@@ -107,7 +106,6 @@ for episode in range(NUM_EPISODES):
         score, width, height, validity = env.update_records()[1:5]
         new_state = env.get_screen()
         new_state = torch.tensor(np.array(new_state)).unsqueeze(0).float()
-        new_state = new_state.unsqueeze(0)
         done = env.check_done()
 
         # Store state from the old step before the action, and the action
@@ -137,18 +135,21 @@ for episode in range(NUM_EPISODES):
             states, actions, scores, next_states, dones, validities = zip(*batch)
 
             # Convert to tensors
+            states = np.stack(states)
+            states = torch.tensor(states).float()
+            actions = np.stack(actions)
             actions = torch.tensor(actions).float()
-            rewards = torch.tensor(scores).float()
+            scores = torch.tensor(scores).float()
+            next_states = np.stack(next_states)
+            next_states = torch.tensor(next_states).float()
             dones = torch.tensor(dones).float()
             validities = torch.tensor(validities).float()
 
             # Calculate critic loss
             current_q_values = critic(states, actions)
             with torch.no_grad():
-                new_actions = target_actor(new_states)[0]
-                print("New Actions: ", new_actions)
-                print("New Actions Shape: ", new_actions.shape)
-                target_q_values = target_critic(new_states, new_actions)
+                new_actions = target_actor(next_states)[0]
+                target_q_values = target_critic(next_states, new_actions)
                 target_q = score + (GAMMA * target_q_values * (1 - done))
 
             critic_loss = nn.MSELoss()(current_q_values, target_q)
@@ -173,7 +174,7 @@ for episode in range(NUM_EPISODES):
 
         # Select action
         if random.random() > EPSILON:
-            action = actor(state)[0]
+            action = actor(state.unsqueeze(0))[0]
             action = action.detach().numpy() # Convert to numpy array
             action_string = f"Unclamped Exploitation Action: {action}\n"
             action += NOISE

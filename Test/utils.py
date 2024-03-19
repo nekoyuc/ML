@@ -56,7 +56,7 @@ class CriticNetwork(nn.Module):
             nn.ReLU(),
             nn.Flatten() # Flatten the output for the fully connected layers below
             # ... mroe convolutional layers if desired ...
-        ) # input size (1, 256, 256), output size (1, 125, 125)
+        ) # input size (1, 1, 256, 256), output size (1, 1, 125, 125)
 
         # Process action (adjust based on integration)
         self.action_layers = nn.Sequential(
@@ -91,6 +91,11 @@ class CriticNetwork(nn.Module):
     def forward(self, state, action):
         x_state = self.conv_state(state)
         x_action = self.action_layers(torch.Tensor(action).unsqueeze(0))
+
+        print("x_state size: ", x_state.size())
+        print("x_action size: ", x_action.size())
+
+        x_action = action.squeeze(0)
 
         x = torch.cat([x_state.flatten(start_dim = 1), x_action], dim = 1) # Concatenation
         x = self.fc_layers(x)
