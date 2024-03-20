@@ -59,6 +59,7 @@ env = TowerBuildingEnv(screen_x = SCREEN_X,
 replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
 
 state_size = env.get_screen().shape
+print("State size: ", state_size)
 action_size = 3 # x, y, and rotation
 hidden_layers_actor = [400, 400]
 hidden_layers_critic = [400, 400]
@@ -86,6 +87,7 @@ for episode in range(NUM_EPISODES):
     score = 0
     state = env.get_screen()
     state = torch.tensor(np.array(state)).unsqueeze(0).float()
+    print("State shape: ", state.shape)
     action = (0.5, 0.5, 0)
     
     while True: # Every loop places a new block

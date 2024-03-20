@@ -84,6 +84,7 @@ class CriticNetwork(nn.Module):
         x_action = self.action_layers(dummy_action)
 
         combined_size = x_state.flatten(start_dim = 1).size(1) + x_action.size(1)
+        print("combined_size shape: ", combined_size)
         return combined_size
         # Calcualte the combined size after state and action processing
         # ... implementation similar to _get_conv_out() ...
@@ -98,6 +99,8 @@ class CriticNetwork(nn.Module):
         x_action = action.squeeze(0)
 
         x = torch.cat([x_state.flatten(start_dim = 1), x_action], dim = 1) # Concatenation
+        print("x size: ", x.size())
+        print("x_type: ", type(x))
         x = self.fc_layers(x)
         return x
 
