@@ -25,13 +25,14 @@ BLOCK_WIDTH = 10
 BLOCK_HEIGHT = 20
 MAX_JOINTS = 20
 
-NUM_EPISODES = 5000
+NUM_EPISODES = 200
 #MAX_STEPS_PER_EPISODE = 1000
 
 # Hyperparameters
-LEARNING_RATE = 0.0001
+CRITIC_LEARNING_RATE = 0.001
+ACTOR_LEARNING_RATE = 0.0005
 DISCOUNT_FACTOR = 0.95
-REPLAY_BUFFER_CAPACITY = 10000
+REPLAY_BUFFER_CAPACITY = 100000
 EPSILON = 1.00 # Initial exploration rate
 EPSILON_DECAY = 0.9995 # How quickly exploration decreases
 BATCH_SIZE = 1000
@@ -59,7 +60,6 @@ env = TowerBuildingEnv(screen_x = SCREEN_X,
 replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
 
 state_size = env.get_screen().shape
-print("State size: ", state_size)
 action_size = 3 # x, y, and rotation
 hidden_layers_actor = [400, 400]
 hidden_layers_critic = [400, 400]
@@ -68,8 +68,8 @@ critic = CriticNetwork(state_size, action_size, hidden_layers_critic)
 target_actor = copy.deepcopy(actor)
 target_critic = copy.deepcopy(critic)
 
-actor_optimizer = optim.Adam(actor.parameters(), lr=LEARNING_RATE)
-critic_optimizer = optim.Adam(critic.parameters(), lr=LEARNING_RATE)
+actor_optimizer = optim.Adam(actor.parameters(), lr=CRITIC_LEARNING_RATE)
+critic_optimizer = optim.Adam(critic.parameters(), lr=ACTOR_LEARNING_RATE)
 
 loss_history = []
 score_history = []
@@ -87,14 +87,13 @@ for episode in range(NUM_EPISODES):
     score = 0
     state = env.get_screen()
     state = torch.tensor(np.array(state)).unsqueeze(0).float()
-    print("State shape: ", state.shape)
     action = (0.5, 0.5, 0)
     
     while True: # Every loop places a new block
         stop = False
 
         # Run the simulation until the tower is stable
-        while stop == False or env.calculate_stability()[1] >= 0.01:
+        while stop == False or env.calculate_stability()[1] >= 0.02:
             env.world.Step(1/10, 6, 2) #Check this step
             env.clock.tick(10000)
             env.render()
@@ -138,9 +137,9 @@ for episode in range(NUM_EPISODES):
 
             # Convert to tensors
             states = np.stack(states)
-            states = torch.tensor(states).float()
+            states = torch.tensor(states).float() # Shape: torce.Size([batch size, 1, state_size[0], state_size[1]])
             actions = np.stack(actions)
-            actions = torch.tensor(actions).float()
+            actions = torch.tensor(actions).float() # Shape: torchSize([batch size, action_size])
             scores = torch.tensor(scores).float()
             next_states = np.stack(next_states)
             next_states = torch.tensor(next_states).float()
@@ -150,7 +149,7 @@ for episode in range(NUM_EPISODES):
             # Calculate critic loss
             current_q_values = critic(states, actions)
             with torch.no_grad():
-                new_actions = target_actor(next_states)[0]
+                new_actions = target_actor(next_states)
                 target_q_values = target_critic(next_states, new_actions)
                 target_q = score + (GAMMA * target_q_values * (1 - done))
 
@@ -160,7 +159,7 @@ for episode in range(NUM_EPISODES):
             critic_optimizer.step()
 
             # Calculate actor loss
-            actor_loss = -critic(states, actor(states)[0]).mean()
+            actor_loss = -critic(states, actor(states)).mean()
             actor_optimizer.zero_grad()
             actor_loss.backward()
             actor_optimizer.step()

@@ -37,7 +37,7 @@ class TowerBuildingEnv(gym.Env):
         self.block_colors = [(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for _ in range(100)]
         self.ppm = 20.0  # pixels per meter
         self.ground = self.world.CreateStaticBody(position=(0, 0))
-        self.ground.CreateEdgeFixture(vertices=[(-2000, 0), (2000, 0)], density=1, friction=0.3)
+        self.ground.CreateEdgeFixture(vertices=[(-10000, 0), (10000, 0)], density=1, friction=0.3)
 
         # Image index
         self.episode = 0
@@ -82,7 +82,7 @@ class TowerBuildingEnv(gym.Env):
         ## efficiency punishment = delta * block_num
         self.delta = -0.05
         ## validity punishment = mu, mu < 0
-        self.mu = -5.0
+        self.mu = -6.0
 
         # Place the first block
         self.place_block(0.5, 0.5, 0)

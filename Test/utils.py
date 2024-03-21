@@ -77,30 +77,22 @@ class CriticNetwork(nn.Module):
         )
 
     def _get_combined_size(self,state_size, action_size):
-        dummy_state = torch.zeros(1, 1, *state_size) # batch size 1, state_size (1, 256, 256)
+        dummy_state = torch.zeros(1, 1, *state_size) # batch size 1, channel size 1, state_size (256, 256)
         dummy_action = torch.zeros(1, action_size) # batch size 1, action_size
+        
+        x_state = self.conv_state(dummy_state) # Size: torch.Size([1, 15625])
+        x_action = self.action_layers(dummy_action) # Size: torch.Size([1, 400])
 
-        x_state = self.conv_state(dummy_state)
-        x_action = self.action_layers(dummy_action)
-
-        combined_size = x_state.flatten(start_dim = 1).size(1) + x_action.size(1)
-        print("combined_size shape: ", combined_size)
+        combined_size = x_state.flatten(start_dim = 1).size(1) + x_action.size(1) # 16025 with dummy input, class 'int'
         return combined_size
         # Calcualte the combined size after state and action processing
         # ... implementation similar to _get_conv_out() ...
 
     def forward(self, state, action):
-        x_state = self.conv_state(state)
-        x_action = self.action_layers(torch.Tensor(action).unsqueeze(0))
+        x_state = self.conv_state(state) # Size: torch.Size([batch size, 15625])
+        x_action = self.action_layers(action) # Size: torch.Size([batch size, 400])
 
-        print("x_state size: ", x_state.size())
-        print("x_action size: ", x_action.size())
-
-        x_action = action.squeeze(0)
-
-        x = torch.cat([x_state.flatten(start_dim = 1), x_action], dim = 1) # Concatenation
-        print("x size: ", x.size())
-        print("x_type: ", type(x))
+        x = torch.cat([x_state, x_action], dim = 1) # Concatenation
         x = self.fc_layers(x)
         return x
 
