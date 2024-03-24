@@ -100,7 +100,6 @@ class TowerBuildingEnv(gym.Env):
         )
         new_block = new_body.CreatePolygonFixture(box = (self.block_width/self.ppm, self.block_height/self.ppm), density = 1, friction = 0.3)
         self.blocks.append(new_block)
-        self.new_block = new_block
 
     def step(self, action): # Return true if a valid and close placement is found
         # Randomly choose a valid and close point

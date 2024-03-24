@@ -106,6 +106,10 @@ class ReplayBuffer:
         #weights = np.array([e[2] + (float(e[5]) * 5) for e in self.experiences]) # Give weights to reward + 5 if valid
         weights = np.array([e[2] + (float(e[5])) for e in self.experiences]) # Prioritize based on TD-error
         probabilities = weights / weights.sum()
+        # Ensure probabilities are greater than zero and sum to 1
+        probabilities = np.clip(probabilities, 0, 1)
+        probabilities /= probabilities.sum()
+        
         indices = np.random.choice(len(self.experiences), batch_size, p = probabilities)
         batch = [self.experiences[index] for index in indices]
         return batch
@@ -127,7 +131,8 @@ def _update_target(target_network, main_network, tau):
     Args:
         target_network (nn.Module): The target network to update
         main_network (nn.Module): The main network from which to draw the updated parameters
-        tau (float): The interpolation parameter for the update, the rate of parameter blending.
+        tau (float): The interpolation parameter for the update, the abs
+        rate of parameter blending.
             A value of 1.0 means hard update. Usually a value between 0.01 and 0.001 is used.
     '''
     for target_param, main_param in zip(target_network.parameters(), main_network.parameters()):
