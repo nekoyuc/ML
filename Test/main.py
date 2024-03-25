@@ -69,7 +69,8 @@ critic = CriticNetwork(state_size, action_size, hidden_layers_critic)
 actor = actor.to('cuda')
 critic = critic.to('cuda')
 target_actor = copy.deepcopy(actor)
-target_critic = copy.deepcopy(critic)
+target_critic = copy.deepcopy(critic)        probabilities = np.maximum(probabilities, 1e-5)
+
 
 actor_optimizer = optim.Adam(actor.parameters(), lr=CRITIC_LEARNING_RATE)
 critic_optimizer = optim.Adam(critic.parameters(), lr=ACTOR_LEARNING_RATE)
