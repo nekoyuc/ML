@@ -12,7 +12,7 @@ class ActorNetwork(nn.Module):
         super().__init__()
 
         # Adjust the 'in_channels' parameter if RGB images are used
-        self.conv_layers = nn.Sequential(
+        self.conv_state = nn.Sequential(
             nn.Conv2d(in_channels = 1, out_channels = 4, kernel_size = 4, stride = 2),
             nn.ReLU(), # 127 x 127, 4 channels
             nn.Conv2d(in_channels = 4, out_channels = 16, kernel_size = 3, stride = 2),
@@ -35,12 +35,12 @@ class ActorNetwork(nn.Module):
     def _get_conv_out(self, state_size):
         # Calculate output size of the convolutional layers
         dummy_input = torch.zeros(1, 1, *state_size) # batch size 1, state_size (1, 256, 256)
-        output = self.conv_layers(dummy_input) # Pass through convolutional layers
+        output = self.conv_state(dummy_input) # Pass through convolutional layers
         conv_out_size = output.size()[1:].numel() # Calculate the output size
         return conv_out_size
 
     def forward(self, state):
-        x = self.conv_layers(state)
+        x = self.conv_state(state)
         x = self.fc_layers(x)
         return x
 
@@ -52,14 +52,14 @@ class CriticNetwork(nn.Module):
         self.conv_state = nn.Sequential(
             nn.Conv2d(in_channels = 1, out_channels = 4, kernel_size = 4, stride = 2),
             nn.ReLU(),
-            nn.Conv2d(in_channels = 4, out_channels = 1, kernel_size = 3, stride = 1),
+            nn.Conv2d(in_channels = 4, out_channels = 16, kernel_size = 3, stride = 2),
             nn.ReLU(),
             nn.Flatten() # Flatten the output for the fully connected layers below
             # ... mroe convolutional layers if desired ...
         ) # input size (1, 1, 256, 256), output size (1, 1, 125, 125)
 
         # Process action (adjust based on integration)
-        self.action_layers = nn.Sequential(
+        self.conv_action = nn.Sequential(
             nn.Linear(action_size, hidden_layers[0]),
             nn.ReLU(),
             # ... potentially more layers ...
@@ -81,7 +81,7 @@ class CriticNetwork(nn.Module):
         dummy_action = torch.zeros(1, action_size) # batch size 1, action_size
         
         x_state = self.conv_state(dummy_state) # Size: torch.Size([1, 15625])
-        x_action = self.action_layers(dummy_action) # Size: torch.Size([1, 400])
+        x_action = self.conv_action(dummy_action) # Size: torch.Size([1, 400])
 
         combined_size = x_state.flatten(start_dim = 1).size(1) + x_action.size(1) # 16025 with dummy input, class 'int'
         return combined_size
@@ -90,7 +90,7 @@ class CriticNetwork(nn.Module):
 
     def forward(self, state, action):
         x_state = self.conv_state(state) # Size: torch.Size([batch size, 15625])
-        x_action = self.action_layers(action) # Size: torch.Size([batch size, 400])
+        x_action = self.conv_action(action) # Size: torch.Size([batch size, 400])
 
         x = torch.cat([x_state, x_action], dim = 1) # Concatenation
         x = self.fc_layers(x)
@@ -106,6 +106,7 @@ class ReplayBuffer:
         #weights = np.array([e[2] + (float(e[5]) * 5) for e in self.experiences]) # Give weights to reward + 5 if valid
         weights = np.array([e[2] + (float(e[5])) for e in self.experiences]) # Prioritize based on TD-error
         probabilities = weights / weights.sum()
+        probabilities = np.maximum(probabilities, 1e-5)
         # Ensure probabilities are greater than zero and sum to 1
         probabilities = np.clip(probabilities, 0, 1)
         probabilities /= probabilities.sum()

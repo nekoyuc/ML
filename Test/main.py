@@ -20,7 +20,7 @@ import os
 SCREEN_X = 600
 SCREEN_Y = 600
 GOAL_WIDTH = 400
-GOAL_HEIGHT = 80
+GOAL_HEIGHT = 250
 BLOCK_WIDTH = 10
 BLOCK_HEIGHT = 20
 MAX_JOINTS = 20
@@ -33,13 +33,13 @@ CRITIC_LEARNING_RATE = 0.001
 ACTOR_LEARNING_RATE = 0.0005
 DISCOUNT_FACTOR = 0.95
 REPLAY_BUFFER_CAPACITY = 100000
-EPSILON = 0.1 # Initial exploration rate
+EPSILON = 0.99 # Initial exploration rate
 EPSILON_DECAY = 0.9995 # How quickly exploration decreases
-BATCH_SIZE = 128
+BATCH_SIZE = 512
 GAMMA = 0.97 # Discount factor
 TAU = 0.01 # Soft update rate
 NOISE = 0 # Exploration noise
-STABILITY_TIMEOUT_MS = 50
+STABILITY_TIMEOUT_MS = 1000
 
 # Parse "--disable-rendering" argument
 parser = argparse.ArgumentParser()
@@ -69,7 +69,7 @@ critic = CriticNetwork(state_size, action_size, hidden_layers_critic)
 actor = actor.to('cuda')
 critic = critic.to('cuda')
 target_actor = copy.deepcopy(actor)
-target_critic = copy.deepcopy(critic)        probabilities = np.maximum(probabilities, 1e-5)
+target_critic = copy.deepcopy(critic)        
 
 
 actor_optimizer = optim.Adam(actor.parameters(), lr=CRITIC_LEARNING_RATE)
@@ -99,9 +99,6 @@ for episode in range(NUM_EPISODES):
 
         # Run the simulation until the tower is stable
         while stop == False or env.calculate_stability()[1] >= 0.02:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    stop = True
             env.world.Step(1/10, 6, 2) #Check this step
             env.clock.tick()#10000)
             env.render()
@@ -233,7 +230,8 @@ for episode in range(NUM_EPISODES):
             #print(f"Exploitation Action: , {action}")
         #action = select_action(state, model, EPSILON)
         else:
-            action = torch.randn_like(action)
+            action = (random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1))
+            action = torch.tensor(action).float().to("cuda")
             action_string = f"No Action Clamping\nExploration Action: {action}\n"
             action_history[action_index] = action_string
             step_history[step_index] = action_string

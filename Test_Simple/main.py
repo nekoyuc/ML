@@ -44,7 +44,7 @@ STABILITY_TIMEOUT_MS = 50
 # Parse "--disable-rendering" argument
 parser = argparse.ArgumentParser()
 parser.add_argument("--disable-rendering", action="store_true")
-parser.add_argument("--experiment-name", type=str, default="experiment")
+parser.add_argument("--experiment-name", type=str, default="experiment_simple")
 args = parser.parse_args()
 # Create experiment dir if it doesn't exist
 os.makedirs(args.experiment_name, exist_ok=True)
@@ -60,26 +60,26 @@ env = TowerBuildingEnv(screen_x = SCREEN_X,
 
 replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
 
-state_size = env.get_screen().shape
+state_size = env.get_screen().shape #[256, 256]
 action_size = 3 # x, y, and rotation
 hidden_layers_actor = [400, 400]
-hidden_layers_critic = [400, 400]
+#hidden_layers_critic = [400, 400]
 actor = ActorNetwork(state_size, action_size, hidden_layers_actor)
-critic = CriticNetwork(state_size, action_size, hidden_layers_critic)
+#critic = CriticNetwork(state_size, action_size, hidden_layers_critic)
 actor = actor.to('cuda')
-critic = critic.to('cuda')
-target_actor = copy.deepcopy(actor)
-target_critic = copy.deepcopy(critic)        probabilities = np.maximum(probabilities, 1e-5)
+#critic = critic.to('cuda')
+#target_actor = copy.deepcopy(actor)
+#target_critic = copy.deepcopy(critic)
 
 
 actor_optimizer = optim.Adam(actor.parameters(), lr=CRITIC_LEARNING_RATE)
-critic_optimizer = optim.Adam(critic.parameters(), lr=ACTOR_LEARNING_RATE)
+#critic_optimizer = optim.Adam(critic.parameters(), lr=ACTOR_LEARNING_RATE)
 
 loss_history = []
 score_history = []
 step_index = 0
 step_history = {}
-critic_loss = 0
+#critic_loss = 0
 last_flip_time = 0
 torch.autograd.set_detect_anomaly(True)
 # Training loop
@@ -99,9 +99,6 @@ for episode in range(NUM_EPISODES):
 
         # Run the simulation until the tower is stable
         while stop == False or env.calculate_stability()[1] >= 0.02:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    stop = True
             env.world.Step(1/10, 6, 2) #Check this step
             env.clock.tick()#10000)
             env.render()
@@ -140,7 +137,7 @@ for episode in range(NUM_EPISODES):
 
         episode_string = f"Episode: {episode}\n"
         #print("Episode: ", episode)
-        record_string = f"Height: {height:.4f}, Width: {width:.4f}, Score: {score:.4f}, Done: {done}\n"
+        #record_string = f"Height: {height:.4f}, Width: {width:.4f}, Score: {score:.4f}, Done: {done}\n"
         #print(f"Height: {height:.4f}, Width: {width:.4f}, Score: {score:.4f}, Done: {done}")
 
         if len(replay_buffer) > BATCH_SIZE:
@@ -160,71 +157,39 @@ for episode in range(NUM_EPISODES):
             dones = torch.tensor(dones).float()
             validities = torch.tensor(validities).float()
 
-            # Calculate critic loss
-            current_q_values = critic(states, actions)
-            q_length = len(current_q_values)
-            q_average = torch.mean(current_q_values)
-            q_max = torch.max(current_q_values)
-            q_min = torch.min(current_q_values)
-            q_std = torch.std(current_q_values)
-            print(f"""Q Length: {q_length},
-                  Q Average: {q_average},
-                  Q Max: {q_max},
-                  Q Min: {q_min},
-                  Q Std: {q_std}""")
-            
             with torch.no_grad():
-                new_actions = target_actor(next_states)
-                print(f"New Actions 1: {new_actions[0]}")
-                target_q_values = target_critic(next_states, new_actions)
+                # Calculate critic loss
+                current_q = actor(states, actions)[1]
+                new_actions = actor(next_states)[0]
+                target_q_values = actor(next_states, new_actions)[1]
                 target_q = score + (GAMMA * target_q_values * (1 - done))
-                action_length = len(new_actions)
-                action_average = torch.mean(new_actions)
-                action_max = torch.max(new_actions)
-                action_min = torch.min(new_actions)
-                action_std = torch.std(new_actions)
-                print(f"""Target Action Length: {action_length},
-                      Target Action Average: {action_average},
-                      Target Action Max: {action_max},
-                      Target Action Min: {action_min},
-                      Target Action Std: {action_std}\n""")
 
-            critic_loss = nn.MSELoss()(current_q_values, target_q)
+            #critic_loss = nn.MSELoss()(current_q_values, target_q)
+            actor_loss = nn.MSELoss()(current_q, target_q)
             # Log target q stats
-            target_q_length = len(target_q)
-            target_q_average = torch.mean(target_q)
-            target_q_max = torch.max(target_q)
-            target_q_min = torch.min(target_q)
-            target_q_std = torch.std(target_q)
-            print(f"""Target Q Length: {target_q_length},
-                    Target Q Average: {target_q_average},
-                    Target Q Max: {target_q_max},
-                    Target Q Min: {target_q_min},
-                    Target Q Std: {target_q_std}\n""")
-
             
-            critic_optimizer.zero_grad()
-            critic_loss.backward()
-            critic_optimizer.step()
+            #critic_optimizer.zero_grad()
+            #critic_loss.backward()
+            #critic_optimizer.step()
 
             # Calculate actor loss
-            actor_loss = -critic(states, actor(states)).mean()
-            actor_optimizer.zero_grad()
-            actor_loss.backward()
-            actor_optimizer.step()
+            # actor_loss = -critic(states, actor(states)).mean()
+            # actor_optimizer.zero_grad()
+            # actor_loss.backward()
+            # actor_optimizer.step()
 
             # Soft update target networks
-            _update_target(target_actor, actor, TAU)
-            _update_target(target_critic, critic, TAU)
+            # _update_target(target_actor, actor, TAU)
+            # _update_target(target_critic, critic, TAU)
 
         if done:
-            loss_history.append(critic_loss) # Store critic loss
+            loss_history.append(actor_loss) # Store critic loss
             score_history.append(score)
             break
 
         # Select action
         if random.random() > EPSILON:
-            action = actor(state.unsqueeze(0))[0]
+            action = actor(state.unsqueeze(0))[0] # State shape: [1, 1, 256, 256], Action shape: [3]
             action_string = f"Unclamped Exploitation Action: {action.detach().cpu()}\n"
             action += NOISE
             action_string = action_string + f"Exploitation Action: {action.detach().cpu()}\n"
@@ -233,7 +198,8 @@ for episode in range(NUM_EPISODES):
             #print(f"Exploitation Action: , {action}")
         #action = select_action(state, model, EPSILON)
         else:
-            action = torch.randn_like(action)
+            action = (random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1))
+            action = torch.tensor(action).float().to("cuda")
             action_string = f"No Action Clamping\nExploration Action: {action}\n"
             action_history[action_index] = action_string
             step_history[step_index] = action_string
@@ -243,7 +209,7 @@ for episode in range(NUM_EPISODES):
         
         #score_history_string = f"Score History: , {score_history}\n"
         #print(f"Score History: , {score_history}\n")
-        print(episode_string+record_string+action_string)
+        #print(episode_string+record_string+action_string)
 
     EPSILON *= EPSILON_DECAY
     # Save action history of last episode to a text file

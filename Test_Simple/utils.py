@@ -24,12 +24,23 @@ class ActorNetwork(nn.Module):
         conv_out_size = self._get_conv_out(state_size)
 
         # Fully connected Layers
-        self.fc_layers = nn.Sequential(
+        self.shared_fc = nn.Sequential(
             nn.Linear(conv_out_size, hidden_layers[0]),
             nn.ReLU(),
-            # ...Additional hidden layers if desired ...
-            nn.Linear(hidden_layers[-1], action_size),
-            nn.ReLU()
+        )
+
+        # Actor Head
+        self.actor_head = nn.Sequential(
+            nn.Linear(hidden_layers[0], hidden_layers[1]),
+            nn.ReLU(),
+            nn.Linear(hidden_layers[1], action_size),
+        )
+
+        # Critic Head
+        self.critic_head = nn.Sequential(
+            nn.Linear(hidden_layers[0], hidden_layers[2]),
+            nn.ReLU(),
+            nn.Linear(hidden_layers[2], 1) # Output a single Q-value
         )
 
     def _get_conv_out(self, state_size):
@@ -38,11 +49,13 @@ class ActorNetwork(nn.Module):
         output = self.conv_layers(dummy_input) # Pass through convolutional layers
         conv_out_size = output.size()[1:].numel() # Calculate the output size
         return conv_out_size
-
-    def forward(self, state):
+    
+    def forward(self, state): # State shape: (batch size, 1, 256, 256)
         x = self.conv_layers(state)
-        x = self.fc_layers(x)
-        return x
+        x = self.shared_fc(x)
+        policy = self.actor_head(x)
+        value = self.critic_head(x)
+        return policy, value
 
 class CriticNetwork(nn.Module):
     def __init__(self, state_size, action_size, hidden_layers):
@@ -106,6 +119,7 @@ class ReplayBuffer:
         #weights = np.array([e[2] + (float(e[5]) * 5) for e in self.experiences]) # Give weights to reward + 5 if valid
         weights = np.array([e[2] + (float(e[5])) for e in self.experiences]) # Prioritize based on TD-error
         probabilities = weights / weights.sum()
+        probabilities = np.maximum(probabilities, 1e-5)
         # Ensure probabilities are greater than zero and sum to 1
         probabilities = np.clip(probabilities, 0, 1)
         probabilities /= probabilities.sum()
