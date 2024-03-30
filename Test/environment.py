@@ -254,8 +254,6 @@ class TowerBuildingEnv(gym.Env):
 
             # Plot the score progress
             
-            import matplotlib.pyplot as plt
-
             records = self.records
             x = [entry[0] for entry in records]
             score = [entry[1] for entry in records]
@@ -342,6 +340,7 @@ class TowerBuildingEnv(gym.Env):
 
             plt.savefig(f'score_plot_episode_{self.episode}.png')
             #os.system('xdg-open score_plot.png')
+            plt.close()
             
             return True
         else:

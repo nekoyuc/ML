@@ -2,6 +2,8 @@ import random
 import torch
 import torch.nn as nn
 import numpy as np
+import signal
+import time
 
 # Hyperparameters
 Kernal_Size = 3
@@ -50,7 +52,7 @@ class ActorNetwork(nn.Module):
         conv_out_size = output.size()[1:].numel() # Calculate the output size
         return conv_out_size
     
-    def forward(self, state): # State shape: (batch size, 1, 256, 256)
+    def forward(self, state, action): # State shape: (batch size, 1, 256, 256)
         x = self.conv_layers(state)
         x = self.shared_fc(x)
         policy = self.actor_head(x)
@@ -151,3 +153,4 @@ def _update_target(target_network, main_network, tau):
     '''
     for target_param, main_param in zip(target_network.parameters(), main_network.parameters()):
         target_param.data.copy_(tau * main_param.data + (1.0 - tau) * target_param.data)
+

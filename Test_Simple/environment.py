@@ -71,7 +71,7 @@ class TowerBuildingEnv(gym.Env):
         self.alpha = 1.6
         self.sigma = 0.0005
         ## height reward = beta * height ^ theta, thea > 1
-        self.beta = 0.0005
+        self.beta = 0.003
         self.theta = 2.13
         ## closeness progress = -(omega * closest_squared)^zeta + phi
         self.omega = 0.0001
@@ -210,7 +210,7 @@ class TowerBuildingEnv(gym.Env):
             #validity_punishment = 0
         #print(f"Progress: {w_h_progress:.4f}, Closeness: {closeness_progress:.4f}, Stability: {stability_punishment:.4f}, Efficiency: {efficiency_punishment:.4f}, Validity: {validity_punishment:.4f}")
         #self.current_score = w_progress + h_reward + closeness_progress + stability_punishment + efficiency_punishment + validity_punishment + 0.40
-        self.current_score = h_reward
+        self.current_score = h_reward + closeness_progress
         #self.current_score = self.current_score / 100 # Scale the score to a range between 0 and 1
         self.highest_score = max(self.highest_score, self.current_score)
         #4 Record the step, score, width, height, and validity
@@ -255,8 +255,6 @@ class TowerBuildingEnv(gym.Env):
 
             # Plot the score progress
             
-            import matplotlib.pyplot as plt
-
             records = self.records
             x = [entry[0] for entry in records]
             score = [entry[1] for entry in records]
@@ -273,7 +271,7 @@ class TowerBuildingEnv(gym.Env):
             ax1.set_xlabel('Steps')
             ax1.set_ylabel('Score', color='b')
             ax1.tick_params('y', colors='b')
-            ax1.set_xlim(0, 300)
+            ax1.set_xlim(0, 100)
             ax1.set_ylim(-0.3, 1.0)
 
             # Create a second y-axis
@@ -341,8 +339,9 @@ class TowerBuildingEnv(gym.Env):
             # Adjust the plot layout
             fig.tight_layout()
 
-            plt.savefig(f'score_plot_episode_{self.episode}.png')
+            plt.savefig(f'score_plot_simple_episode_{self.episode}.png')
             #os.system('xdg-open score_plot.png')
+            plt.close()
             
             return True
         else:

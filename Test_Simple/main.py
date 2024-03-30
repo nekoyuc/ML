@@ -12,7 +12,8 @@ import matplotlib.pyplot as plt
 import os
 import copy
 import argparse
-import os
+import signal
+import time
 
 # ... Other RL algorithm imports ...
 
@@ -20,7 +21,7 @@ import os
 SCREEN_X = 600
 SCREEN_Y = 600
 GOAL_WIDTH = 400
-GOAL_HEIGHT = 80
+GOAL_HEIGHT = 120
 BLOCK_WIDTH = 10
 BLOCK_HEIGHT = 20
 MAX_JOINTS = 20
@@ -33,13 +34,13 @@ CRITIC_LEARNING_RATE = 0.001
 ACTOR_LEARNING_RATE = 0.0005
 DISCOUNT_FACTOR = 0.95
 REPLAY_BUFFER_CAPACITY = 100000
-EPSILON = 0.1 # Initial exploration rate
-EPSILON_DECAY = 0.9995 # How quickly exploration decreases
+EPSILON = 0.995 # Initial exploration rate
+EPSILON_DECAY = 0.998 # How quickly exploration decreases
 BATCH_SIZE = 128
 GAMMA = 0.97 # Discount factor
 TAU = 0.01 # Soft update rate
 NOISE = 0 # Exploration noise
-STABILITY_TIMEOUT_MS = 50
+STABILITY_TIMEOUT_MS = 500
 
 # Parse "--disable-rendering" argument
 parser = argparse.ArgumentParser()
@@ -62,7 +63,7 @@ replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
 
 state_size = env.get_screen().shape #[256, 256]
 action_size = 3 # x, y, and rotation
-hidden_layers_actor = [400, 400]
+hidden_layers_actor = [400, 400, 400]
 #hidden_layers_critic = [400, 400]
 actor = ActorNetwork(state_size, action_size, hidden_layers_actor)
 #critic = CriticNetwork(state_size, action_size, hidden_layers_critic)
@@ -80,10 +81,65 @@ score_history = []
 step_index = 0
 step_history = {}
 #critic_loss = 0
+actor_loss = 0.0
 last_flip_time = 0
 torch.autograd.set_detect_anomaly(True)
 # Training loop
-for episode in range(NUM_EPISODES):
+
+def save_model(path):
+    checkpoint_dir = "checkpoints_simple"
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    torch.save({
+        'episode': episode,
+        'model_state_dict': actor.state_dict(),
+        'optimizer_state_dict': actor_optimizer.state_dict(),
+    }, os.path.join(checkpoint_dir, path))
+
+    '''
+    Save the model parameters to a file
+
+    Args:
+        path (str): The path to save the model parameters
+    '''
+    
+    print("Saving model to: ", path)
+
+def interrupt_handler(sig, frame):
+    save_model("checkpoint_pause.pth")
+    print("Training interrupted. Progress saved.")
+    exit(0) # Exit the program
+
+def load_latest(checkpoint_dir):
+    checkpoints = [os.path.join(checkpoint_dir, name)
+                   for name in os.listdir(checkpoint_dir)
+                   if name.endswith('.pth')]
+    if not checkpoints:
+        print("No checkpoints found")
+        return None
+    
+    latest = sorted(checkpoints)[-1]
+    print(f"Loading latest checkpoint: {latest}")
+
+load_latest("checkpoints_simple")
+
+signal.signal(signal.SIGINT, interrupt_handler) # For KeyboardInterrupt
+
+# Checkpoint loading code
+load_checkpoint = False
+checkpoint_path = "xxx"
+
+if load_checkpoint:
+    checkpoint = torch.load(checkpoint_path)
+    actor.load_state_dict(checkpoint['model_state_dict'])
+    actor_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    start_episode = checkpoint['episode']
+    print(f"Checkpoint loaded from episode {start_episode}")
+else:
+    start_episode = 0
+
+for episode in range(start_episode, NUM_EPISODES):
+    state_dict = actor.state_dict()
+    print(f"Episode: {episode}")
     env.reset()
     EPSILON = max(EPSILON * EPSILON_DECAY, 0.01)    
     action_index = 0
@@ -98,7 +154,7 @@ for episode in range(NUM_EPISODES):
         start_ticks = pygame.time.get_ticks()
 
         # Run the simulation until the tower is stable
-        while stop == False or env.calculate_stability()[1] >= 0.02:
+        while stop == False or env.calculate_stability()[1] >= 0.08:
             env.world.Step(1/10, 6, 2) #Check this step
             env.clock.tick()#10000)
             env.render()
@@ -147,27 +203,27 @@ for episode in range(NUM_EPISODES):
 
             # Convert to tensors
             states = torch.stack(states)
-            states = torch.tensor(states).float() # Shape: torce.Size([batch size, 1, state_size[0], state_size[1]])
+            states = states.clone().detach().float() # Shape: torce.Size([batch size, 1, state_size[0], state_size[1]])
             actions = torch.stack(actions).float() # Shape: torchSize([batch size, action_size])
 
             scores = np.stack(scores)
             scores = torch.tensor(scores).float()
             next_states = torch.stack(next_states)
-            next_states = torch.tensor(next_states).float()
+            next_states = next_states.clone().detach().float()
             dones = torch.tensor(dones).float()
             validities = torch.tensor(validities).float()
 
             with torch.no_grad():
                 # Calculate critic loss
-                current_q = actor(states, actions)[1]
-                new_actions = actor(next_states)[0]
+                new_actions, current_q = actor(states, actions)
+                new_actions = new_actions[0]
                 target_q_values = actor(next_states, new_actions)[1]
                 target_q = score + (GAMMA * target_q_values * (1 - done))
 
             #critic_loss = nn.MSELoss()(current_q_values, target_q)
             actor_loss = nn.MSELoss()(current_q, target_q)
+
             # Log target q stats
-            
             #critic_optimizer.zero_grad()
             #critic_loss.backward()
             #critic_optimizer.step()
@@ -183,13 +239,19 @@ for episode in range(NUM_EPISODES):
             # _update_target(target_critic, critic, TAU)
 
         if done:
-            loss_history.append(actor_loss) # Store critic loss
+            if type(actor_loss) != float:
+                #actor_loss = 0.0
+                actor_loss_record = actor_loss.cpu().item()
+            else:
+                actor_loss_record = 0.0
+            
+            loss_history.append(actor_loss_record) # Store critic loss
             score_history.append(score)
             break
 
         # Select action
         if random.random() > EPSILON:
-            action = actor(state.unsqueeze(0))[0] # State shape: [1, 1, 256, 256], Action shape: [3]
+            action = actor(state.unsqueeze(0), action)[0].flatten() # State shape: [1, 1, 256, 256], Action shape: [3]
             action_string = f"Unclamped Exploitation Action: {action.detach().cpu()}\n"
             action += NOISE
             action_string = action_string + f"Exploitation Action: {action.detach().cpu()}\n"
@@ -205,11 +267,13 @@ for episode in range(NUM_EPISODES):
             step_history[step_index] = action_string
             #print(f"Exploration Action: , {action}")
         action_index += 1
-        env.step(action.detach().cpu().numpy())
+        action_env = action.detach().cpu().numpy().flatten()
+        env.step(action_env)
         
-        #score_history_string = f"Score History: , {score_history}\n"
+        score_history_string = f"Score History: , {score_history}\n"
         #print(f"Score History: , {score_history}\n")
         #print(episode_string+record_string+action_string)
+        #print(episode_string+action_string)
 
     EPSILON *= EPSILON_DECAY
     # Save action history of last episode to a text file
@@ -219,10 +283,14 @@ for episode in range(NUM_EPISODES):
     with open(filename, 'w') as file:
         for index, action_string in action_history.items():
             file.write(f"Action {index}: {action_string}\n")
+    
     env.episode += 1
+    if episode % 10 == 0:
+        if episode != 0:
+            save_model(f'checkpoint_episode_{episode}.pth')
 
 # Save step history of all episodes to a text file
-with open(f'/home/yucblob/src/ML/step_history.txt', 'w') as file:
+with open(f'/home/yucblob/src/ML/step_history_simple.txt', 'w') as file:
     for index, action_string in step_history.items():
         file.write(f"Step {index}: {action_string}\n")
 
@@ -242,5 +310,5 @@ ax2.tick_params(axis='y', labelcolor=color)
 
 fig.tight_layout()
 plt.title('DQN Training Loss and Performance')
-plt.savefig('loss_and_score_plot.png')
-os.system('xdg-open loss_and_score_plot.png')
+plt.savefig('loss_and_score_simple_plot.png')
+os.system('xdg-open loss_and_score_simple_plot.png')

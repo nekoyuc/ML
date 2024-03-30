@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import os
 import copy
 import argparse
-import os
 
 # ... Other RL algorithm imports ...
 
@@ -25,7 +24,7 @@ BLOCK_WIDTH = 10
 BLOCK_HEIGHT = 20
 MAX_JOINTS = 20
 
-NUM_EPISODES = 200
+NUM_EPISODES = 500
 #MAX_STEPS_PER_EPISODE = 1000
 
 # Hyperparameters
@@ -35,7 +34,7 @@ DISCOUNT_FACTOR = 0.95
 REPLAY_BUFFER_CAPACITY = 100000
 EPSILON = 0.99 # Initial exploration rate
 EPSILON_DECAY = 0.9995 # How quickly exploration decreases
-BATCH_SIZE = 512
+BATCH_SIZE = 1024
 GAMMA = 0.97 # Discount factor
 TAU = 0.01 # Soft update rate
 NOISE = 0 # Exploration noise
@@ -79,11 +78,12 @@ loss_history = []
 score_history = []
 step_index = 0
 step_history = {}
-critic_loss = 0
+critic_loss = 0.0
 last_flip_time = 0
 torch.autograd.set_detect_anomaly(True)
 # Training loop
 for episode in range(NUM_EPISODES):
+    print("Episode: ", episode)
     env.reset()
     EPSILON = max(EPSILON * EPSILON_DECAY, 0.01)    
     action_index = 0
@@ -98,7 +98,7 @@ for episode in range(NUM_EPISODES):
         start_ticks = pygame.time.get_ticks()
 
         # Run the simulation until the tower is stable
-        while stop == False or env.calculate_stability()[1] >= 0.02:
+        while stop == False or env.calculate_stability()[1] >= 0.03:
             env.world.Step(1/10, 6, 2) #Check this step
             env.clock.tick()#10000)
             env.render()
@@ -147,58 +147,26 @@ for episode in range(NUM_EPISODES):
 
             # Convert to tensors
             states = torch.stack(states)
-            states = torch.tensor(states).float() # Shape: torce.Size([batch size, 1, state_size[0], state_size[1]])
+            states = states.clone().detach().float() # Shape: torce.Size([batch size, 1, state_size[0], state_size[1]])
             actions = torch.stack(actions).float() # Shape: torchSize([batch size, action_size])
 
             scores = np.stack(scores)
             scores = torch.tensor(scores).float()
             next_states = torch.stack(next_states)
-            next_states = torch.tensor(next_states).float()
+            next_states = next_states.clone().detach().float()
             dones = torch.tensor(dones).float()
             validities = torch.tensor(validities).float()
 
             # Calculate critic loss
             current_q_values = critic(states, actions)
-            q_length = len(current_q_values)
-            q_average = torch.mean(current_q_values)
-            q_max = torch.max(current_q_values)
-            q_min = torch.min(current_q_values)
-            q_std = torch.std(current_q_values)
-            print(f"""Q Length: {q_length},
-                  Q Average: {q_average},
-                  Q Max: {q_max},
-                  Q Min: {q_min},
-                  Q Std: {q_std}""")
             
             with torch.no_grad():
                 new_actions = target_actor(next_states)
-                print(f"New Actions 1: {new_actions[0]}")
                 target_q_values = target_critic(next_states, new_actions)
                 target_q = score + (GAMMA * target_q_values * (1 - done))
-                action_length = len(new_actions)
-                action_average = torch.mean(new_actions)
-                action_max = torch.max(new_actions)
-                action_min = torch.min(new_actions)
-                action_std = torch.std(new_actions)
-                print(f"""Target Action Length: {action_length},
-                      Target Action Average: {action_average},
-                      Target Action Max: {action_max},
-                      Target Action Min: {action_min},
-                      Target Action Std: {action_std}\n""")
 
             critic_loss = nn.MSELoss()(current_q_values, target_q)
             # Log target q stats
-            target_q_length = len(target_q)
-            target_q_average = torch.mean(target_q)
-            target_q_max = torch.max(target_q)
-            target_q_min = torch.min(target_q)
-            target_q_std = torch.std(target_q)
-            print(f"""Target Q Length: {target_q_length},
-                    Target Q Average: {target_q_average},
-                    Target Q Max: {target_q_max},
-                    Target Q Min: {target_q_min},
-                    Target Q Std: {target_q_std}\n""")
-
             
             critic_optimizer.zero_grad()
             critic_loss.backward()
@@ -215,6 +183,12 @@ for episode in range(NUM_EPISODES):
             _update_target(target_critic, critic, TAU)
 
         if done:
+            if type(critic_loss) != float:
+                #actor_loss = 0.0
+                critic_loss_record = critic_loss.cpu().item()
+            else:
+                critic_loss_record = critic_loss
+            
             loss_history.append(critic_loss) # Store critic loss
             score_history.append(score)
             break
@@ -241,7 +215,7 @@ for episode in range(NUM_EPISODES):
         
         #score_history_string = f"Score History: , {score_history}\n"
         #print(f"Score History: , {score_history}\n")
-        print(episode_string+record_string+action_string)
+        #print(episode_string+record_string+action_string)
 
     EPSILON *= EPSILON_DECAY
     # Save action history of last episode to a text file
