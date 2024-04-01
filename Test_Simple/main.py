@@ -1,4 +1,3 @@
-import gym
 import pygame
 import torch
 import torch.nn as nn
@@ -13,7 +12,6 @@ import os
 import copy
 import argparse
 import signal
-import time
 
 # ... Other RL algorithm imports ...
 
@@ -26,7 +24,7 @@ BLOCK_WIDTH = 10
 BLOCK_HEIGHT = 20
 MAX_JOINTS = 20
 
-NUM_EPISODES = 200
+NUM_EPISODES = 2000
 #MAX_STEPS_PER_EPISODE = 1000
 
 # Hyperparameters
@@ -35,12 +33,16 @@ ACTOR_LEARNING_RATE = 0.0005
 DISCOUNT_FACTOR = 0.95
 REPLAY_BUFFER_CAPACITY = 100000
 EPSILON = 0.995 # Initial exploration rate
-EPSILON_DECAY = 0.998 # How quickly exploration decreases
+EPSILON_DECAY = 0.9995 # How quickly exploration decreases
 BATCH_SIZE = 128
 GAMMA = 0.97 # Discount factor
 TAU = 0.01 # Soft update rate
 NOISE = 0 # Exploration noise
 STABILITY_TIMEOUT_MS = 500
+
+# Save Parameters
+LOAD_CHECKPOINT = True
+CHECKPOINT_PATH = "checkpoints_simple"
 
 # Parse "--disable-rendering" argument
 parser = argparse.ArgumentParser()
@@ -86,58 +88,78 @@ last_flip_time = 0
 torch.autograd.set_detect_anomaly(True)
 # Training loop
 
-def save_model(path):
-    checkpoint_dir = "checkpoints_simple"
-    os.makedirs(checkpoint_dir, exist_ok=True)
+def save_model(path, episode):
+    os.makedirs(path, exist_ok=True)
     torch.save({
         'episode': episode,
         'model_state_dict': actor.state_dict(),
         'optimizer_state_dict': actor_optimizer.state_dict(),
-    }, os.path.join(checkpoint_dir, path))
+    }, os.path.join(path, f"checkpoint_episode_{episode}.pth"))
 
-    '''
-    Save the model parameters to a file
+    # Save loss and score history
+    np.savetxt(os.path.join(path, f"loss_history_episode_{episode}.txt"), loss_history)
+    np.savetxt(os.path.join(path, f"score_history_{episode}.txt"), score_history)
 
-    Args:
-        path (str): The path to save the model parameters
-    '''
-    
+    replay_buffer.save(path, episode)
     print("Saving model to: ", path)
-
-def interrupt_handler(sig, frame):
-    save_model("checkpoint_pause.pth")
-    print("Training interrupted. Progress saved.")
-    exit(0) # Exit the program
 
 def load_latest(checkpoint_dir):
     checkpoints = [os.path.join(checkpoint_dir, name)
                    for name in os.listdir(checkpoint_dir)
                    if name.endswith('.pth')]
+    loss_histories = [os.path.join(checkpoint_dir, name)
+                     for name in os.listdir(checkpoint_dir)
+                     if name.startswith('loss_history_episode')]
+    score_histories = [os.path.join(checkpoint_dir, name)
+                        for name in os.listdir(checkpoint_dir)
+                        if name.startswith('score_history')]
+    
     if not checkpoints:
         print("No checkpoints found")
-        return None
+        return None, [], []
+
+    checkpoints.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    latest_checkpoint = checkpoints[-1]
+    print(f"Latest checkpoint found: {latest_checkpoint}")
+    checkpoint = torch.load(latest_checkpoint)
+        
+    loss_histories.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    latest_loss_history = loss_histories[-1]
+    print(f"Latest loss history found: {latest_loss_history}")
+    loss_history = np.loadtxt(latest_loss_history).tolist()
     
-    latest = sorted(checkpoints)[-1]
-    print(f"Loading latest checkpoint: {latest}")
+    score_histories.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    latest_score_history = score_histories[-1]
+    print(f"Latest score history found: {latest_score_history}/n")
+    score_history = np.loadtxt(latest_score_history).tolist()
+    
+    return checkpoint, loss_history, score_history
 
-load_latest("checkpoints_simple")
-
+'''
+def interrupt_handler(sig, frame):
+    save_model(CHECKPOINT_PATH, "checkpoint_episode_0pause.pth") # follow the format of checkpoint_episode_{episode}.pth for sorting
+    print("Training interrupted. Progress saved.")
+    exit(0) # Exit the program
 signal.signal(signal.SIGINT, interrupt_handler) # For KeyboardInterrupt
+'''
 
-# Checkpoint loading code
-load_checkpoint = False
-checkpoint_path = "xxx"
+if LOAD_CHECKPOINT:
+    checkpoint, loss_history, score_history  = load_latest(CHECKPOINT_PATH)
+    if checkpoint != None:
+        actor.load_state_dict(checkpoint['model_state_dict'])
+        actor_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_episode = checkpoint['episode']
+        print(f"Checkpoint loaded from: episode {start_episode}")
+        replay_buffer.load(CHECKPOINT_PATH)
 
-if load_checkpoint:
-    checkpoint = torch.load(checkpoint_path)
-    actor.load_state_dict(checkpoint['model_state_dict'])
-    actor_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    start_episode = checkpoint['episode']
-    print(f"Checkpoint loaded from episode {start_episode}")
+    else:
+        start_episode = 0
+        print("No checkpoint loaded")
 else:
+    print("Starting from scratch")
     start_episode = 0
 
-for episode in range(start_episode, NUM_EPISODES):
+for episode in range(start_episode+1, NUM_EPISODES):
     state_dict = actor.state_dict()
     print(f"Episode: {episode}")
     env.reset()
@@ -154,7 +176,7 @@ for episode in range(start_episode, NUM_EPISODES):
         start_ticks = pygame.time.get_ticks()
 
         # Run the simulation until the tower is stable
-        while stop == False or env.calculate_stability()[1] >= 0.08:
+        while stop == False or env.calculate_stability()[1] >= 0.1:
             env.world.Step(1/10, 6, 2) #Check this step
             env.clock.tick()#10000)
             env.render()
@@ -274,6 +296,11 @@ for episode in range(start_episode, NUM_EPISODES):
         #print(f"Score History: , {score_history}\n")
         #print(episode_string+record_string+action_string)
         #print(episode_string+action_string)
+    
+    env.episode += 1
+    if episode % 10 == 0:
+        if episode != 0:
+            save_model(CHECKPOINT_PATH, episode)
 
     EPSILON *= EPSILON_DECAY
     # Save action history of last episode to a text file
@@ -283,11 +310,6 @@ for episode in range(start_episode, NUM_EPISODES):
     with open(filename, 'w') as file:
         for index, action_string in action_history.items():
             file.write(f"Action {index}: {action_string}\n")
-    
-    env.episode += 1
-    if episode % 10 == 0:
-        if episode != 0:
-            save_model(f'checkpoint_episode_{episode}.pth')
 
 # Save step history of all episodes to a text file
 with open(f'/home/yucblob/src/ML/step_history_simple.txt', 'w') as file:
