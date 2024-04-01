@@ -100,18 +100,17 @@ def save_model(path, episode):
     np.savetxt(os.path.join(path, f"loss_history_episode_{episode}.txt"), loss_history)
     np.savetxt(os.path.join(path, f"score_history_{episode}.txt"), score_history)
 
-    replay_buffer.save(path, episode)
     print("Saving model to: ", path)
 
-def load_latest(checkpoint_dir):
-    checkpoints = [os.path.join(checkpoint_dir, name)
-                   for name in os.listdir(checkpoint_dir)
+def load_latest(path):
+    checkpoints = [os.path.join(path, name)
+                   for name in os.listdir(path)
                    if name.endswith('.pth')]
-    loss_histories = [os.path.join(checkpoint_dir, name)
-                     for name in os.listdir(checkpoint_dir)
+    loss_histories = [os.path.join(path, name)
+                     for name in os.listdir(path)
                      if name.startswith('loss_history_episode')]
-    score_histories = [os.path.join(checkpoint_dir, name)
-                        for name in os.listdir(checkpoint_dir)
+    score_histories = [os.path.join(path, name)
+                        for name in os.listdir(path)
                         if name.startswith('score_history')]
     
     if not checkpoints:
@@ -135,14 +134,6 @@ def load_latest(checkpoint_dir):
     
     return checkpoint, loss_history, score_history
 
-'''
-def interrupt_handler(sig, frame):
-    save_model(CHECKPOINT_PATH, "checkpoint_episode_0pause.pth") # follow the format of checkpoint_episode_{episode}.pth for sorting
-    print("Training interrupted. Progress saved.")
-    exit(0) # Exit the program
-signal.signal(signal.SIGINT, interrupt_handler) # For KeyboardInterrupt
-'''
-
 if LOAD_CHECKPOINT:
     checkpoint, loss_history, score_history  = load_latest(CHECKPOINT_PATH)
     if checkpoint != None:
@@ -150,6 +141,7 @@ if LOAD_CHECKPOINT:
         actor_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_episode = checkpoint['episode']
         print(f"Checkpoint loaded from: episode {start_episode}")
+        
         replay_buffer.load(CHECKPOINT_PATH)
 
     else:
@@ -160,6 +152,7 @@ else:
     start_episode = 0
 
 for episode in range(start_episode+1, NUM_EPISODES):
+    env.episode = episode
     state_dict = actor.state_dict()
     print(f"Episode: {episode}")
     env.reset()
@@ -232,8 +225,8 @@ for episode in range(start_episode+1, NUM_EPISODES):
             scores = torch.tensor(scores).float()
             next_states = torch.stack(next_states)
             next_states = next_states.clone().detach().float()
-            dones = torch.tensor(dones).float()
-            validities = torch.tensor(validities).float()
+            dones = torch.tensor(dones).bool()
+            validities = torch.tensor(validities).bool()
 
             with torch.no_grad():
                 # Calculate critic loss
@@ -297,10 +290,13 @@ for episode in range(start_episode+1, NUM_EPISODES):
         #print(episode_string+record_string+action_string)
         #print(episode_string+action_string)
     
-    env.episode += 1
     if episode % 10 == 0:
         if episode != 0:
             save_model(CHECKPOINT_PATH, episode)
+    
+    if episode % 100 == 0:
+        if episode != 0:
+            replay_buffer.save(CHECKPOINT_PATH, episode)
 
     EPSILON *= EPSILON_DECAY
     # Save action history of last episode to a text file

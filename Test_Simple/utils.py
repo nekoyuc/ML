@@ -2,9 +2,10 @@ import random
 import torch
 import torch.nn as nn
 import numpy as np
-import pickle
 import signal
 import time
+import os
+import h5py
 
 # Hyperparameters
 Kernal_Size = 3
@@ -139,6 +140,22 @@ class ReplayBuffer:
         self.position = (self.position + 1) % self.capacity
     
     def save(self, path, episode):
+        '''
+        experiences_saved = []
+        for s, a, r, ns, d, v in self.experiences:
+            experiences_saved.append({
+                'state': s.cpu().numpy().tolist(), # Convert tensor to a list
+                'action': a.cpu().numpy().tolist(),
+                'score': r,
+                'next_state': ns.cpu().numpy().tolist(),
+                'done': d,
+                'valid': v
+            })
+        with open(path+"/replay_buffer_"+str(episode)+".json", "w") as f:
+            json.dump(experiences_saved, f)
+        '''
+
+        '''
         experiences_saved = [(s.cpu().numpy(), a.cpu().numpy(), sc, ns.cpu().numpy(), d, v)
                                  for s, a, sc, ns, d, v in self.experiences]
         data = {
@@ -146,11 +163,56 @@ class ReplayBuffer:
             'position': self.position,
             'capacity': self.capacity
         }
-        with open(path+"/replay_buffer.pkl", "wb") as f:
-            pickle.dump(data, f)
-        print("Replay buffer saved to: ", path+"/replay_buffer.pkl")
+        '''
+
+        #with h5py.File(path+"/replay_buffer_"+str(episode)+".h5", "w") as f:
+        with h5py.File(path+"/replay_buffer.h5", "w") as f:
+            for i, (s, a, sc, ns, d, v) in enumerate(self.experiences):
+                f.create_dataset(str(i)+"/state", data = s.cpu().numpy())
+                f.create_dataset(str(i)+"/action", data = a.cpu().numpy())
+                f.create_dataset(str(i)+"/score", data = sc)
+                f.create_dataset(str(i)+"/next_state", data = ns.cpu().numpy())
+                f.create_dataset(str(i)+"/done", data = d)
+                f.create_dataset(str(i)+"/valid", data = v)
+            f.create_dataset("position", data = self.position)
+            f.create_dataset("capacity", data = self.capacity)
+            print("replay buffer length: ", len(self.experiences))
+            print("Saved replay buffer Lengths: ", len(f.keys()))
+
+        print("Replay buffer saved to: ", path+"/replay_buffer.h5")
 
     def load(self, path):
+        '''
+        saved_replay_buffers = [os.path.join(path, name)
+                   for name in os.listdir(path)
+                   if name.endswith('.h5')]
+        
+        if not saved_replay_buffers:
+            print("No saved replay buffers found")
+            return
+        
+        saved_replay_buffers.sort(key = lambda x: int(x.split('_')[-1].split('.')[0]))
+        latest_replay_buffer = saved_replay_buffers[-1]
+        print(f"Latest replay buffer found: {latest_replay_buffer}")
+        '''
+
+        latest_replay_buffer = path+"/replay_buffer.h5"
+        if os.path.exists(latest_replay_buffer):
+            with h5py.File(latest_replay_buffer, "r") as f:
+                for i in range(len(f.keys())-2):
+                    s = torch.tensor(f[str(i)+"/state"][:]).to("cuda")
+                    a = torch.tensor(f[str(i)+"/action"][:]).to("cuda")
+                    sc = float(f[str(i)+"/score"][()])
+                    ns = torch.tensor(f[str(i)+"/next_state"][:]).to("cuda")
+                    d = bool(f[str(i)+"/done"][()])
+                    v = bool(f[str(i)+"/valid"][()])
+                    self.experiences.append((s, a, sc, ns, d, v))
+                self.position = f["position"][()]
+                self.capacity = f["capacity"][()]
+            print("Replay buffer loaded from latest")
+        else:
+            print("Replay buffer file not found.")
+        '''
         try:
             with open(path+"/replay_buffer.pkl", "rb") as f:
                 data = pickle.load(f)
@@ -161,6 +223,7 @@ class ReplayBuffer:
             print("Replay buffer loaded from: ", path+"/replay_buffer.pkl")
         except FileNotFoundError:
             print("Replay buffer file not found.")
+        '''
 
     def __len__(self):
         return len(self.experiences)

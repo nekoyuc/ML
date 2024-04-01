@@ -10,6 +10,7 @@ env = gym.make('CartPole-v0')
 
 import torch
 import random
+import os
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
@@ -339,7 +340,11 @@ class TowerBuildingEnv(gym.Env):
             # Adjust the plot layout
             fig.tight_layout()
 
-            plt.savefig(f'score_plot_simple_episode_{self.episode}.png')
+            # Create directory if it does not exist
+            if not os.path.exists('plot_simple'):
+                os.makedirs('plot_simple')
+
+            plt.savefig(f'plot_simple/score_plot_simple_episode_{self.episode}.png')
             #os.system('xdg-open score_plot.png')
             plt.close()
             
@@ -363,7 +368,7 @@ class TowerBuildingEnv(gym.Env):
         # Save gray image
         #gray_image.save(f'screenshot_grey_{self.image_index}.png')
         
-        resized_screen = gray_image.resize((256, 256), Image.BILINEAR)
+        resized_screen = gray_image.resize((128, 128), Image.BILINEAR)
         # Save resized gray image
         #resized_screen.save(f'screenshot_resized_{self.image_index}.png')
         #resized_screen.save(f'screenshot_resized_{self.image_index}.png')
