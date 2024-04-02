@@ -85,6 +85,8 @@ class TowerBuildingEnv(gym.Env):
         ## validity punishment = mu, mu < 0
         self.mu = -6.0
 
+        self.closeness_accumulator = 0
+
         # Place the first block
         self.place_block(0.5, 0.5, 0)
 
@@ -198,20 +200,25 @@ class TowerBuildingEnv(gym.Env):
         self.height = self.max_h_coord
 
         #3 Update the score
+        w_progress, h_reward, closeness_progress, efficiency_punishment = self.calculate_progress()
         # Divide the score by 100 to scale it to a range between 0 and 1
-        w_progress = self.calculate_w_progress()/100.0
-        h_reward = self.calculate_h_reward()/100.0
-        closeness_progress = self.calculate_closeness()/100.0
+        w_progress = w_progress/100.0
+        h_reward = h_reward/100.0
+        closeness_progress = closeness_progress/200.0
+        efficiency_punishment = efficiency_punishment/100.0
         stability_punishment = self.calculate_stability()[2]/100.0
-        efficiency_punishment = self.calculate_efficiency()/100.0
+
+        self.closeness_accumulator += closeness_progress
+        
         if self.is_valid:
             validity_punishment = 0
         else:
             validity_punishment = self.mu/100
             #validity_punishment = 0
+
         #print(f"Progress: {w_h_progress:.4f}, Closeness: {closeness_progress:.4f}, Stability: {stability_punishment:.4f}, Efficiency: {efficiency_punishment:.4f}, Validity: {validity_punishment:.4f}")
         #self.current_score = w_progress + h_reward + closeness_progress + stability_punishment + efficiency_punishment + validity_punishment + 0.40
-        self.current_score = h_reward + closeness_progress
+        self.current_score = h_reward + self.closeness_accumulator + 0.40
         #self.current_score = self.current_score / 100 # Scale the score to a range between 0 and 1
         self.highest_score = max(self.highest_score, self.current_score)
         #4 Record the step, score, width, height, and validity
@@ -224,13 +231,14 @@ class TowerBuildingEnv(gym.Env):
                              h_reward,
                              closeness_progress))
         return (self.steps, self.current_score, self.width, self.height, self.is_valid)
+    
+    def calculate_progress(self):
+        w_progress = self.sigma * (self.goal_width ** self.alpha - abs(self.width - self.goal_width) ** self.alpha)
+        h_reward = self.beta * (self.height ** self.theta)
+        closeness_progress = - (self.omega * self.closest_squared) ** self.zeta + self.phi
+        efficiency_punishment = self.delta * len(self.blocks)
+        return w_progress, h_reward, closeness_progress, efficiency_punishment
 
-    def calculate_w_progress(self):
-        return self.sigma * (self.goal_width ** self.alpha - abs(self.width - self.goal_width) ** self.alpha)
-    
-    def calculate_h_reward(self):
-        return self.beta * (self.height ** self.theta)
-    
     def calculate_stability(self):
         average_speed = 0
         max_speed = 0
@@ -243,9 +251,6 @@ class TowerBuildingEnv(gym.Env):
         average_speed /= len(self.blocks)
         punishment = self.kappa * (average_speed + max_speed)
         return [average_speed, max_speed, punishment]
-    
-    def calculate_efficiency(self):
-        return self.delta * len(self.blocks)
     
     def calculate_closeness(self):
         return - (self.omega * self.closest_squared) ** self.zeta + self.phi
@@ -407,6 +412,8 @@ class TowerBuildingEnv(gym.Env):
         self.highest_score = 0
         self.steps = 0
         self.records = [] # (step, score, width, height, self.is_valid)
+
+        self.closeness_accumulator = 0
 
         # Place the first block
         self.place_block(0.5, 0.5, 0)

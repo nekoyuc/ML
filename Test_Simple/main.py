@@ -197,15 +197,6 @@ for episode in range(start_episode+1, NUM_EPISODES):
         state = new_state
         state = state.to("cuda")
 
-        # Debugging: Save state to a local txt file
-        '''
-        state_numpy = state.detach().numpy()
-        state_numpy = state_numpy.squeeze()
-        print("State shape: ", state_numpy.shape)
-        # Save state_numpy to a local txt file
-        np.savetxt(f'state_numpy_{episode}_{env.image_index}.txt', state_numpy)
-        '''
-
         episode_string = f"Episode: {episode}\n"
         #print("Episode: ", episode)
         #record_string = f"Height: {height:.4f}, Width: {width:.4f}, Score: {score:.4f}, Done: {done}\n"

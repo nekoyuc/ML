@@ -140,31 +140,6 @@ class ReplayBuffer:
         self.position = (self.position + 1) % self.capacity
     
     def save(self, path, episode):
-        '''
-        experiences_saved = []
-        for s, a, r, ns, d, v in self.experiences:
-            experiences_saved.append({
-                'state': s.cpu().numpy().tolist(), # Convert tensor to a list
-                'action': a.cpu().numpy().tolist(),
-                'score': r,
-                'next_state': ns.cpu().numpy().tolist(),
-                'done': d,
-                'valid': v
-            })
-        with open(path+"/replay_buffer_"+str(episode)+".json", "w") as f:
-            json.dump(experiences_saved, f)
-        '''
-
-        '''
-        experiences_saved = [(s.cpu().numpy(), a.cpu().numpy(), sc, ns.cpu().numpy(), d, v)
-                                 for s, a, sc, ns, d, v in self.experiences]
-        data = {
-            'experiences': experiences_saved,
-            'position': self.position,
-            'capacity': self.capacity
-        }
-        '''
-
         #with h5py.File(path+"/replay_buffer_"+str(episode)+".h5", "w") as f:
         with h5py.File(path+"/replay_buffer.h5", "w") as f:
             for i, (s, a, sc, ns, d, v) in enumerate(self.experiences):
@@ -212,18 +187,6 @@ class ReplayBuffer:
             print("Replay buffer loaded from latest")
         else:
             print("Replay buffer file not found.")
-        '''
-        try:
-            with open(path+"/replay_buffer.pkl", "rb") as f:
-                data = pickle.load(f)
-            self.experiences = [(torch.tensor(s).to("cuda"), torch.tensor(a).to("cuda"), sc, torch.tensor(ns).to("cuda"), d, v)
-                                for s, a, sc, ns, d, v in data['experiences']]
-            self.position = data['position']
-            self.capacity = data['capacity']
-            print("Replay buffer loaded from: ", path+"/replay_buffer.pkl")
-        except FileNotFoundError:
-            print("Replay buffer file not found.")
-        '''
 
     def __len__(self):
         return len(self.experiences)
