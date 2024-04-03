@@ -4,36 +4,57 @@ from Box2D import (b2World, b2PolygonShape, b2CircleShape, b2_dynamicBody, b2Dis
 import random
 import numpy as np
 import os
-import platform
 from PIL import Image
 env = gym.make('CartPole-v0')
 
-import torch
 import random
 import os
-import torch.nn as nn
-import torch.optim as optim
 import matplotlib.pyplot as plt
+import json
+
+with open('Test_Simple/config.json', 'r') as f:
+    config = json.load(f)
+
+# Environment parameters
+SCREEN_X = config["SCREEN_X"]
+SCREEN_Y = config["SCREEN_Y"]
+GOAL_WIDTH = config["GOAL_WIDTH"]
+GOAL_HEIGHT = config["GOAL_HEIGHT"]
+BLOCK_WIDTH = config["BLOCK_WIDTH"]
+BLOCK_HEIGHT = config["BLOCK_HEIGHT"]
+MAX_JOINTS = config["MAX_JOINTS"]
+
+# Score function parameters
+ALPHA = config["SC_ALPHA"]
+SIGMA = config["SC_SIGMA"]
+BETA = config["SC_BETA"]
+THETA = config["SC_THETA"]
+OMEGA = config["SC_OMEGA"]
+ZETA = config["SC_ZETA"]
+PHI = config["SC_PHI"]
+KAPPA = config["SC_KAPPA"]
+DELTA = config["SC_DELTA"]
+MU = config["SC_MU"]
 
 class TowerBuildingEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
     # Definition with grid size
-    def __init__(self, screen_x, screen_y, goal_width, goal_height, block_width, block_height, max_joints):    
+    def __init__(self):
         # Pygame Initialization
         pygame.init()
 
         # Box2D World Initialization
         self.world = b2World(gravity=(0, -10), doSleep=True) # Box2D world
-        self.screen_x = screen_x
-        self.screen_y = screen_y
-        self.screen = pygame.display.set_mode((screen_x, screen_y))
-        self.goal_width = goal_width
-        self.goal_height = goal_height
-        self.block_width = block_width
-        self.block_height = block_height
+        self.screen_x = SCREEN_X
+        self.screen_y = SCREEN_Y
+        self.screen = pygame.display.set_mode((self.screen_x, self.screen_y))
+        self.goal_width = GOAL_WIDTH
+        self.goal_height = GOAL_HEIGHT
+        self.block_width = BLOCK_WIDTH
+        self.block_height = BLOCK_HEIGHT
         self.block_radius = 0.6 * np.sqrt(self.block_width ** 2 + self.block_height ** 2)
-        self.max_joints = max_joints
+        self.max_joints = MAX_JOINTS
         self.clock = pygame.time.Clock()
         self.block_colors = [(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for _ in range(100)]
         self.ppm = 20.0  # pixels per meter
@@ -46,8 +67,8 @@ class TowerBuildingEnv(gym.Env):
 
         # Coordinates calculation helper parameters
         self.max_h_coord = 0
-        self.min_x_coord = screen_x/2
-        self.max_x_coord = screen_x/2
+        self.min_x_coord = self.screen_x/2
+        self.max_x_coord = self.screen_x/2
 
         # Valication helper parameters
         self.is_valid = False
@@ -69,21 +90,21 @@ class TowerBuildingEnv(gym.Env):
 
         ### Score function parameters
         ## width progress = sigma * (goal_width ^ alpha - (width - goal_width) ^ alpha), alpha > 1, sigma > 0
-        self.alpha = 1.6
-        self.sigma = 0.0005
+        self.alpha = ALPHA
+        self.sigma = SIGMA
         ## height reward = beta * height ^ theta, thea > 1
-        self.beta = 0.003
-        self.theta = 2.13
+        self.beta = BETA
+        self.theta = THETA
         ## closeness progress = -(omega * closest_squared)^zeta + phi
-        self.omega = 0.0001
-        self.zeta = 1.001
-        self.phi = 7
+        self.omega = OMEGA
+        self.zeta = ZETA
+        self.phi = PHI
         ## stability punishment = kappa * (average_speed + max_speed)
-        self.kappa = -0.01
+        self.kappa = KAPPA
         ## efficiency punishment = delta * block_num
-        self.delta = -0.05
+        self.delta = DELTA
         ## validity punishment = mu, mu < 0
-        self.mu = -6.0
+        self.mu = MU
 
         self.closeness_accumulator = 0
 
@@ -202,11 +223,11 @@ class TowerBuildingEnv(gym.Env):
         #3 Update the score
         w_progress, h_reward, closeness_progress, efficiency_punishment = self.calculate_progress()
         # Divide the score by 100 to scale it to a range between 0 and 1
-        w_progress = w_progress/100.0
-        h_reward = h_reward/100.0
-        closeness_progress = closeness_progress/200.0
-        efficiency_punishment = efficiency_punishment/100.0
-        stability_punishment = self.calculate_stability()[2]/100.0
+        w_progress = w_progress/200.0
+        h_reward = h_reward/200.0
+        closeness_progress = closeness_progress/400.0
+        efficiency_punishment = efficiency_punishment/200.0
+        stability_punishment = self.calculate_stability()[2]/200.0
 
         self.closeness_accumulator += closeness_progress
         
@@ -218,7 +239,7 @@ class TowerBuildingEnv(gym.Env):
 
         #print(f"Progress: {w_h_progress:.4f}, Closeness: {closeness_progress:.4f}, Stability: {stability_punishment:.4f}, Efficiency: {efficiency_punishment:.4f}, Validity: {validity_punishment:.4f}")
         #self.current_score = w_progress + h_reward + closeness_progress + stability_punishment + efficiency_punishment + validity_punishment + 0.40
-        self.current_score = h_reward + self.closeness_accumulator + 0.40
+        self.current_score = (h_reward + self.closeness_accumulator + 0.5)
         #self.current_score = self.current_score / 100 # Scale the score to a range between 0 and 1
         self.highest_score = max(self.highest_score, self.current_score)
         #4 Record the step, score, width, height, and validity

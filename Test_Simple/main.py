@@ -3,46 +3,36 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-from torch.utils.data import DataLoader
 import random
 from environment import TowerBuildingEnv
 from utils import ActorNetwork, CriticNetwork, ReplayBuffer, _update_target
 import matplotlib.pyplot as plt
 import os
-import copy
+import json
 import argparse
-import signal
-
-# ... Other RL algorithm imports ...
-
-# Environment parameters
-SCREEN_X = 600
-SCREEN_Y = 600
-GOAL_WIDTH = 400
-GOAL_HEIGHT = 120
-BLOCK_WIDTH = 10
-BLOCK_HEIGHT = 20
-MAX_JOINTS = 20
 
 NUM_EPISODES = 2000
 #MAX_STEPS_PER_EPISODE = 1000
 
+with open('Test_Simple/config.json', 'r') as f:
+    config = json.load(f)
+
 # Hyperparameters
-CRITIC_LEARNING_RATE = 0.001
-ACTOR_LEARNING_RATE = 0.0005
-DISCOUNT_FACTOR = 0.95
-REPLAY_BUFFER_CAPACITY = 100000
-EPSILON = 0.995 # Initial exploration rate
-EPSILON_DECAY = 0.9995 # How quickly exploration decreases
-BATCH_SIZE = 128
-GAMMA = 0.97 # Discount factor
-TAU = 0.01 # Soft update rate
-NOISE = 0 # Exploration noise
-STABILITY_TIMEOUT_MS = 500
+CRITIC_LEARNING_RATE = config['CRITIC_LEARNING_RATE'] 
+ACTOR_LEARNING_RATE = config['ACTOR_LEARNING_RATE']
+DISCOUNT_FACTOR = config['DISCOUNT_FACTOR']
+REPLAY_BUFFER_CAPACITY = config['REPLAY_BUFFER_CAPACITY']
+EPSILON = config['EPSILON'] # Initial exploration rate
+EPSILON_DECAY = config['EPSILON_DECAY'] # How quickly exploration decreases
+BATCH_SIZE = config['BATCH_SIZE'] # Batch size for training
+GAMMA = config['GAMMA'] # Discount factor
+TAU = config['TAU'] # Soft update rate
+NOISE = config['NOISE'] # Exploration noise
+STABILITY_TIMEOUT_MS = config['STABILITY_TIMEOUT_MS'] # Time to wait for tower to stabilize
 
 # Save Parameters
-LOAD_CHECKPOINT = True
-CHECKPOINT_PATH = "checkpoints_simple"
+LOAD_CHECKPOINT = config['LOAD_CHECKPOINT']
+CHECKPOINT_PATH = config['CHECKPOINT_PATH']
 
 # Parse "--disable-rendering" argument
 parser = argparse.ArgumentParser()
@@ -53,6 +43,8 @@ args = parser.parse_args()
 os.makedirs(args.experiment_name, exist_ok=True)
 
 # Initialize environment, replay buffer, and model
+env = TowerBuildingEnv()
+'''
 env = TowerBuildingEnv(screen_x = SCREEN_X,
                         screen_y = SCREEN_Y,
                         goal_width = GOAL_WIDTH,
@@ -60,6 +52,7 @@ env = TowerBuildingEnv(screen_x = SCREEN_X,
                         block_width = BLOCK_WIDTH,
                         block_height = BLOCK_HEIGHT,
                         max_joints = MAX_JOINTS)
+'''
 
 replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
 
@@ -129,7 +122,7 @@ def load_latest(path):
     
     score_histories.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
     latest_score_history = score_histories[-1]
-    print(f"Latest score history found: {latest_score_history}/n")
+    print(f"Latest score history found: {latest_score_history}\n")
     score_history = np.loadtxt(latest_score_history).tolist()
     
     return checkpoint, loss_history, score_history
@@ -273,6 +266,7 @@ for episode in range(start_episode+1, NUM_EPISODES):
             step_history[step_index] = action_string
             #print(f"Exploration Action: , {action}")
         action_index += 1
+        step_index += 1
         action_env = action.detach().cpu().numpy().flatten()
         env.step(action_env)
         
