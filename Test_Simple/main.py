@@ -29,6 +29,7 @@ GAMMA = config['GAMMA'] # Discount factor
 TAU = config['TAU'] # Soft update rate
 NOISE = config['NOISE'] # Exploration noise
 STABILITY_TIMEOUT_MS = config['STABILITY_TIMEOUT_MS'] # Time to wait for tower to stabilize
+HIDDEN_LAYERS_ACTOR = config['HIDDEN_LAYERS_ACTOR']
 
 # Save Parameters
 LOAD_CHECKPOINT = config['LOAD_CHECKPOINT']
@@ -58,9 +59,9 @@ replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
 
 state_size = env.get_screen().shape #[256, 256]
 action_size = 3 # x, y, and rotation
-hidden_layers_actor = [400, 400, 400]
+
 #hidden_layers_critic = [400, 400]
-actor = ActorNetwork(state_size, action_size, hidden_layers_actor)
+actor = ActorNetwork(state_size, action_size, HIDDEN_LAYERS_ACTOR)
 #critic = CriticNetwork(state_size, action_size, hidden_layers_critic)
 actor = actor.to('cuda')
 #critic = critic.to('cuda')
