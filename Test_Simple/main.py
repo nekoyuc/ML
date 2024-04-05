@@ -22,7 +22,6 @@ CRITIC_LEARNING_RATE = config['CRITIC_LEARNING_RATE']
 ACTOR_LEARNING_RATE = config['ACTOR_LEARNING_RATE']
 DISCOUNT_FACTOR = config['DISCOUNT_FACTOR']
 REPLAY_BUFFER_CAPACITY = config['REPLAY_BUFFER_CAPACITY']
-EPSILON = config['EPSILON'] # Initial exploration rate
 EPSILON_DECAY = config['EPSILON_DECAY'] # How quickly exploration decreases
 BATCH_SIZE = config['BATCH_SIZE'] # Batch size for training
 GAMMA = config['GAMMA'] # Discount factor
@@ -85,6 +84,7 @@ torch.autograd.set_detect_anomaly(True)
 def save_model(path, episode):
     os.makedirs(path, exist_ok=True)
     torch.save({
+        'EPSILON': EPSILON,
         'episode': episode,
         'model_state_dict': actor.state_dict(),
         'optimizer_state_dict': actor_optimizer.state_dict(),
@@ -131,6 +131,7 @@ def load_latest(path):
 if LOAD_CHECKPOINT:
     checkpoint, loss_history, score_history  = load_latest(CHECKPOINT_PATH)
     if checkpoint != None:
+        EPSILON = checkpoint['EPSILON']
         actor.load_state_dict(checkpoint['model_state_dict'])
         actor_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_episode = checkpoint['episode']
@@ -139,15 +140,18 @@ if LOAD_CHECKPOINT:
         replay_buffer.load(CHECKPOINT_PATH)
 
     else:
+        EPSILON = config['EPSILON'] # Initial exploration rate
+        print("EPSILON: ", EPSILON)
         start_episode = 0
         print("No checkpoint loaded")
 else:
+    EPSILON = config['EPSILON'] # Initial exploration rate
+    print("EPSILON: ", EPSILON)
     print("Starting from scratch")
     start_episode = 0
 
 for episode in range(start_episode+1, NUM_EPISODES):
     env.episode = episode
-    state_dict = actor.state_dict()
     print(f"Episode: {episode}")
     env.reset()
     EPSILON = max(EPSILON * EPSILON_DECAY, 0.01)    
@@ -220,8 +224,14 @@ for episode in range(start_episode+1, NUM_EPISODES):
                 target_q_values = actor(next_states, new_actions)[1]
                 target_q = score + (GAMMA * target_q_values * (1 - done))
 
-            #critic_loss = nn.MSELoss()(current_q_values, target_q)
+            current_q.requires_grad_(True)  # Set requires_grad to True
+            target_q.requires_grad_(True)  # Set requires_grad to True
+
             actor_loss = nn.MSELoss()(current_q, target_q)
+
+            actor_optimizer.zero_grad()
+            actor_loss.backward()
+            actor_optimizer.step()
 
             # Log target q stats
             #critic_optimizer.zero_grad()
