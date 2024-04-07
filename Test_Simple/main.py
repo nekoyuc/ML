@@ -132,12 +132,12 @@ if LOAD_CHECKPOINT:
     checkpoint, loss_history, score_history  = load_latest(CHECKPOINT_PATH)
     if checkpoint != None:
         EPSILON = checkpoint['EPSILON']
+        print(f"EPSILON: {EPSILON}")
         actor.load_state_dict(checkpoint['model_state_dict'])
         actor_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_episode = checkpoint['episode']
-        print(f"Checkpoint loaded from: episode {start_episode}")
-        
         replay_buffer.load(CHECKPOINT_PATH)
+        print(f"Checkpoint loaded from: episode {start_episode}\n")
 
     else:
         EPSILON = config['EPSILON'] # Initial exploration rate
