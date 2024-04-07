@@ -154,7 +154,6 @@ for episode in range(start_episode+1, NUM_EPISODES):
     env.episode = episode
     print(f"Episode: {episode}")
     env.reset()
-    EPSILON = max(EPSILON * EPSILON_DECAY, 0.01)    
     action_index = 0
     action_history = {}
     score = 0
@@ -294,7 +293,7 @@ for episode in range(start_episode+1, NUM_EPISODES):
         if episode != 0:
             replay_buffer.save(CHECKPOINT_PATH, episode)
 
-    EPSILON *= EPSILON_DECAY
+    EPSILON = max(EPSILON * EPSILON_DECAY, 0.01)
     # Save action history of last episode to a text file
     # Create the file if it doesn't exist
 
