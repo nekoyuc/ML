@@ -239,7 +239,7 @@ class TowerBuildingEnv(gym.Env):
 
         #print(f"Progress: {w_h_progress:.4f}, Closeness: {closeness_progress:.4f}, Stability: {stability_punishment:.4f}, Efficiency: {efficiency_punishment:.4f}, Validity: {validity_punishment:.4f}")
         #self.current_score = w_progress + h_reward + closeness_progress + stability_punishment + efficiency_punishment + validity_punishment + 0.40
-        self.current_score = (h_reward + self.closeness_accumulator + 0.5)
+        self.current_score = (h_reward)
         #self.current_score = self.current_score / 100 # Scale the score to a range between 0 and 1
         self.highest_score = max(self.highest_score, self.current_score)
         #4 Record the step, score, width, height, and validity

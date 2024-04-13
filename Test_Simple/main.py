@@ -11,13 +11,13 @@ import os
 import json
 import argparse
 
-NUM_EPISODES = 2000
 #MAX_STEPS_PER_EPISODE = 1000
 
 with open('Test_Simple/config.json', 'r') as f:
     config = json.load(f)
 
 # Hyperparameters
+NUM_EPISODES = config['NUM_EPISODES']
 CRITIC_LEARNING_RATE = config['CRITIC_LEARNING_RATE'] 
 ACTOR_LEARNING_RATE = config['ACTOR_LEARNING_RATE']
 DISCOUNT_FACTOR = config['DISCOUNT_FACTOR']
@@ -130,13 +130,13 @@ def load_latest(path):
 
 if LOAD_CHECKPOINT:
     checkpoint, loss_history, score_history  = load_latest(CHECKPOINT_PATH)
+    replay_buffer.load(CHECKPOINT_PATH)
     if checkpoint != None:
         EPSILON = checkpoint['EPSILON']
         print(f"EPSILON: {EPSILON}")
         actor.load_state_dict(checkpoint['model_state_dict'])
         actor_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_episode = checkpoint['episode']
-        replay_buffer.load(CHECKPOINT_PATH)
         print(f"Checkpoint loaded from: episode {start_episode}\n")
 
     else:
